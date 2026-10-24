@@ -8,6 +8,7 @@ mod error;
 pub mod github_events;
 pub mod installations;
 pub mod jobs;
+pub mod sent_replies;
 pub mod tips;
 pub mod users;
 pub mod wallets;

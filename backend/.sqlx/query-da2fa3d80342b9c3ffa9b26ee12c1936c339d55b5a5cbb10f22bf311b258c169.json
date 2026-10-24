@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO sent_replies (key) VALUES ($1) ON CONFLICT (key) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "da2fa3d80342b9c3ffa9b26ee12c1936c339d55b5a5cbb10f22bf311b258c169"
+}

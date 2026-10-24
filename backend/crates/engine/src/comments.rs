@@ -94,15 +94,14 @@ impl Engine {
         }
 
         if !parse_errors.is_empty() {
-            jobs::enqueue_once(
-                &mut tx,
-                &context.reply(Reply::ParseErrors {
+            let reply = context.reply(
+                format!("parse_errors:{}", context.comment_id),
+                Reply::ParseErrors {
                     sender: author.login.clone(),
                     errors: parse_errors,
-                }),
-                format!("parse_errors:{}", context.comment_id),
-            )
-            .await?;
+                },
+            );
+            jobs::enqueue_reply(&mut tx, &reply).await?;
         }
         if accepted {
             context.react(&mut tx, Reaction::Eyes).await?;
@@ -237,8 +236,9 @@ pub(crate) struct CommentContext {
 }
 
 impl CommentContext {
-    fn reply(&self, reply: Reply) -> PostReply {
+    fn reply(&self, key: String, reply: Reply) -> PostReply {
         PostReply {
+            key,
             installation: self.github_installation,
             repo: self.thread.full_name(),
             thread_number: self.thread.number,
@@ -296,31 +296,28 @@ pub(crate) async fn reject_verifying(
     Ok(())
 }
 
-/// Queues a message about `tip` in its thread, at most once per tip and message kind.
+/// Queues a message about `tip` in its thread, keyed per tip and message kind.
 pub(crate) async fn enqueue_tip_reply(
     tx: &mut PgConnection,
     installation: GithubInstallationId,
     tip: &Tip,
     message: TipMessage,
 ) -> Result<(), EngineError> {
-    jobs::enqueue_once(
-        tx,
-        &PostReply {
-            installation,
-            repo: tip.thread.full_name(),
-            thread_number: tip.thread.number,
-            reply: Reply::Tip {
-                tip_id: tip.id,
-                message,
-            },
+    let reply = PostReply {
+        key: format!("reply:{}:{}", tip.id, message.as_str()),
+        installation,
+        repo: tip.thread.full_name(),
+        thread_number: tip.thread.number,
+        reply: Reply::Tip {
+            tip_id: tip.id,
+            message,
         },
-        format!("reply:{}:{}", tip.id, message.as_str()),
-    )
-    .await?;
+    };
+    jobs::enqueue_reply(tx, &reply).await?;
     Ok(())
 }
 
-/// Queues a reaction on a `/tip` comment, at most once per comment and reaction.
+/// Queues a reaction on a `/tip` comment, keyed per comment and reaction.
 pub(crate) async fn enqueue_reaction(
     tx: &mut PgConnection,
     installation: GithubInstallationId,
@@ -328,19 +325,16 @@ pub(crate) async fn enqueue_reaction(
     comment_id: i64,
     reaction: Reaction,
 ) -> Result<(), EngineError> {
-    jobs::enqueue_once(
-        tx,
-        &PostReply {
-            installation,
-            repo: thread.full_name(),
-            thread_number: thread.number,
-            reply: Reply::Reaction {
-                comment_id,
-                reaction,
-            },
+    let reply = PostReply {
+        key: format!("reaction:{comment_id}:{}", reaction.content()),
+        installation,
+        repo: thread.full_name(),
+        thread_number: thread.number,
+        reply: Reply::Reaction {
+            comment_id,
+            reaction,
         },
-        format!("reaction:{comment_id}:{}", reaction.content()),
-    )
-    .await?;
+    };
+    jobs::enqueue_reply(tx, &reply).await?;
     Ok(())
 }

@@ -432,6 +432,7 @@ async fn concurrent_status_updates_both_survive(pool: PgPool) -> sqlx::Result<()
         .fetch_one(&h.pool)
         .await?;
     let reply = |n| PostReply {
+        key: format!("test-status-{n}"),
         installation: mergetip_core::GithubInstallationId::new(77),
         repo: REPO.into(),
         thread_number: 42,
@@ -647,6 +648,74 @@ async fn huge_comments_get_a_bounded_reply(pool: PgPool) -> sqlx::Result<()> {
         posted[0].len() < 2_000,
         "reply is {} bytes",
         posted[0].len()
+    );
+    Ok(())
+}
+
+/// Re-running the step that queued a reply, after the reply job finished and was deleted, must
+/// not post it again.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn replies_are_posted_once_even_when_requeued(pool: PgPool) -> sqlx::Result<()> {
+    let mut h = Harness::new(pool, true);
+    h.comment(
+        1001,
+        (10, "maintainer"),
+        "/tip @reviewer nope\n/tip @reviewer 10",
+        42,
+    )
+    .await;
+    let before = h.github.posted_bodies();
+    let reactions = h.reactions().len();
+
+    // Replay the delivery from scratch, as after a crash before it was marked processed.
+    sqlx::query!("UPDATE github_events SET processed_at = NULL")
+        .execute(&h.pool)
+        .await?;
+    let mut tx = h.pool.begin().await?;
+    mergetip_engine::jobs::enqueue(
+        &mut tx,
+        &ProcessEvent {
+            delivery_id: "delivery-1".into(),
+        },
+    )
+    .await
+    .unwrap();
+    tx.commit().await?;
+    h.drain().await;
+
+    assert_eq!(h.github.posted_bodies(), before, "no duplicate comments");
+    assert_eq!(h.reactions().len(), reactions, "no duplicate reactions");
+    Ok(())
+}
+
+/// A status reply retried after it already succeeded (e.g. its job lost the lease) adds nothing.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn retried_status_reply_does_not_repeat_its_line(pool: PgPool) -> sqlx::Result<()> {
+    let mut h = Harness::new(pool, true);
+    h.comment(1001, (10, "maintainer"), "/tip @reviewer 10", 42)
+        .await;
+    let tip_id = sqlx::query_scalar!("SELECT id FROM tips")
+        .fetch_one(&h.pool)
+        .await?;
+    let paid = PostReply {
+        key: format!("reply:{tip_id}:paid"),
+        installation: mergetip_core::GithubInstallationId::new(77),
+        repo: REPO.into(),
+        thread_number: 42,
+        reply: mergetip_engine::jobs::Reply::Tip {
+            tip_id: mergetip_core::TipId::from_uuid(tip_id),
+            message: mergetip_engine::jobs::TipMessage::Paid,
+        },
+    };
+    h.engine.post_reply(&paid).await.unwrap();
+
+    let posted = h.github.posted_bodies();
+    assert_eq!(posted.len(), 1);
+    assert_eq!(
+        posted[0].matches("tipped @reviewer").count(),
+        1,
+        "{}",
+        posted[0]
     );
     Ok(())
 }

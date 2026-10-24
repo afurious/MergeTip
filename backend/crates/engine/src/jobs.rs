@@ -32,14 +32,13 @@ pub async fn enqueue<P: JobPayload>(conn: &mut PgConnection, payload: &P) -> Sto
     jobs::enqueue(conn, &payload.job()).await
 }
 
-/// Enqueues `payload` unless a live job with the same dedupe key exists, so re-running the step
-/// that produced it (after a crash or a lost race) can't post the same reply twice.
-pub(crate) async fn enqueue_once<P: JobPayload>(
+/// Enqueues a reply unless one with the same key is already queued. This only avoids redundant
+/// jobs; `sent_replies` is what guarantees a reply is posted at most once.
+pub(crate) async fn enqueue_reply(
     conn: &mut PgConnection,
-    payload: &P,
-    dedupe_key: String,
+    reply: &PostReply,
 ) -> StoreResult<Enqueued> {
-    jobs::enqueue(conn, &payload.job().dedupe_key(dedupe_key)).await
+    jobs::enqueue(conn, &reply.job().dedupe_key(reply.key.clone())).await
 }
 
 /// Process one stored GitHub webhook delivery.
@@ -76,6 +75,8 @@ impl JobPayload for PayTip {
 /// current data, so a retried reply never shows stale facts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PostReply {
+    /// Names what is said where, e.g. `reply:<tip id>:paid`. A key is posted at most once.
+    pub key: String,
     pub installation: GithubInstallationId,
     pub repo: String,
     pub thread_number: u32,
@@ -149,6 +150,7 @@ mod tests {
     #[test]
     fn reply_payload_shape_is_stable() {
         let reply = PostReply {
+            key: "reaction:9:eyes".into(),
             installation: GithubInstallationId::new(7),
             repo: "acme/widgets".into(),
             thread_number: 42,
@@ -160,6 +162,7 @@ mod tests {
         assert_eq!(
             reply.job().payload,
             json!({
+                "key": "reaction:9:eyes",
                 "installation": 7, "repo": "acme/widgets", "thread_number": 42,
                 "reply": { "type": "reaction", "comment_id": 9, "reaction": "eyes" }
             })

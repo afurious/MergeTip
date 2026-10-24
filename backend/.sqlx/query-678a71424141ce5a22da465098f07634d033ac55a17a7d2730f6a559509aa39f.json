@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE github_events SET processed_at = NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "678a71424141ce5a22da465098f07634d033ac55a17a7d2730f6a559509aa39f"
+}
