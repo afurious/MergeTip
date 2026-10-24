@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO jobs (kind, payload, run_at, dedupe_key, max_attempts)\n        VALUES ($1, $2, COALESCE($3, now()), $4, $5)\n        ON CONFLICT (kind, dedupe_key) WHERE dedupe_key IS NOT NULL AND dead_at IS NULL\n        DO NOTHING\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "jobs",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Jsonb",
+        "Timestamptz",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7e60f3a283f82c4d5e1ac16fe80cb5d654659c82b82d3a15487aa83cd39ff7eb"
+}

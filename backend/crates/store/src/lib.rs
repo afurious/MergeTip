@@ -6,6 +6,7 @@
 mod error;
 pub mod github_events;
 pub mod installations;
+pub mod jobs;
 pub mod tips;
 pub mod users;
 

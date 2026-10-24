@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE jobs SET dead_at = now(), last_error = $3, locked_at = NULL, locked_by = NULL\n        WHERE id = $1 AND locked_by = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "89388e863c9132e2cb5a519a416dbe279fceb7417a731272992373933dcb62da"
+}
