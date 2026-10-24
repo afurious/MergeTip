@@ -2085,6 +2085,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "mergetip-e2e"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "hex",
+ "mergetip-api",
+ "mergetip-core",
+ "mergetip-crypto",
+ "mergetip-engine",
+ "mergetip-github",
+ "mergetip-store",
+ "mergetip-worker",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tokio-util",
+ "tower",
+ "wiremock",
+]
+
+[[package]]
 name = "mergetip-engine"
 version = "0.1.0"
 dependencies = [

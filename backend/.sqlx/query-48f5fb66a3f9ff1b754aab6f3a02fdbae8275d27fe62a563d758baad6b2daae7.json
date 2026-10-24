@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT state, amount_sats, verified_by, payment_hash FROM tips",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "state"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "amount_sats",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "amount_sats"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "verified_by",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "verified_by"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "payment_hash",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "payment_hash"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "48f5fb66a3f9ff1b754aab6f3a02fdbae8275d27fe62a563d758baad6b2daae7"
+}

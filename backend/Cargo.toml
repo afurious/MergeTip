@@ -19,6 +19,8 @@ mergetip-payer = { path = "crates/payer" }
 mergetip-fiat = { path = "crates/fiat" }
 mergetip-notify = { path = "crates/notify" }
 mergetip-store = { path = "crates/store" }
+mergetip-worker = { path = "crates/worker" }
+mergetip-api = { path = "crates/api" }
 mergetip-crypto = { path = "crates/crypto" }
 mergetip-engine = { path = "crates/engine" }
 mergetip-runtime = { path = "crates/runtime" }
