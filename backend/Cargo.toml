@@ -57,10 +57,8 @@ utoipa = { version = "6", features = ["axum_extras", "uuid", "time"] }
 # integrations
 octocrab = "0.54"
 nostr-sdk = "0.45"
-nwc = "0.45"
-lnurl-rs = "0.10"
-# lnurl-rs 0.10 needs secp256k1 rand std features enabled transitively
-bitcoin = { version = "0.32", features = ["rand-std"] }
+# Only for its re-exported secp256k1, to sign invoices in tests and the local mocks.
+bitcoin = { version = "0.32", default-features = false, features = ["std", "secp-recovery"] }
 lightning-invoice = "0.34"
 
 # crypto

@@ -12,17 +12,25 @@ workspace = true
 
 [dependencies]
 mergetip-core.workspace = true
-nwc.workspace = true
-nostr-sdk.workspace = true
-lnurl-rs.workspace = true
-bitcoin.workspace = true
-lightning-invoice.workspace = true
+mergetip-crypto.workspace = true
 async-trait.workspace = true
-thiserror.workspace = true
-tracing.workspace = true
-sha2.workspace = true
 hex.workspace = true
+lightning-invoice.workspace = true
+nostr-sdk.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+time.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+bitcoin = { workspace = true, optional = true }
+
+[features]
+# Invoice minting and an in-process mock wallet, for tests and the local mock servers.
+testing = ["dep:bitcoin"]
 
 [dev-dependencies]
+bitcoin.workspace = true
 wiremock.workspace = true
-tokio.workspace = true
