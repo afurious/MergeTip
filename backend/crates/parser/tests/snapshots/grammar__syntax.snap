@@ -1,0 +1,5 @@
+---
+source: crates/parser/tests/grammar.rs
+expression: SYNTAX
+---
+/tip @username <amount>[k] [sats] [on-merge] [for <note>]
