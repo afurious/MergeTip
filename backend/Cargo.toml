@@ -31,7 +31,7 @@ tokio-util = "0.7"
 axum = "0.8"
 tower-http = { version = "0.7", features = ["trace", "limit", "cors", "timeout", "request-id", "sensitive-headers"] }
 tower = { version = "0.5", features = ["util"] }
-reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "form", "rustls"] }
 
 # serialization / errors / ids
 serde = { version = "1", features = ["derive"] }
@@ -72,6 +72,7 @@ sha2 = "0.11"
 hex = "0.4"
 base64 = "0.22"
 getrandom = "0.4"
+subtle = "2"
 
 # testing
 proptest = "1"

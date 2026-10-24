@@ -2052,6 +2052,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "base64 0.22.1",
  "clap",
  "dotenvy",
  "hex",
@@ -2065,12 +2066,14 @@ dependencies = [
  "serde_json",
  "sqlx",
  "thiserror 2.0.21",
+ "time",
  "tokio",
  "tokio-util",
  "tower",
  "tower-http 0.7.1",
  "tracing",
  "utoipa",
+ "wiremock",
 ]
 
 [[package]]
@@ -2096,6 +2099,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.1",
+ "subtle",
  "thiserror 2.0.21",
  "zeroize",
 ]
@@ -2164,7 +2168,9 @@ dependencies = [
  "async-trait",
  "insta",
  "mergetip-core",
+ "mergetip-crypto",
  "octocrab",
+ "reqwest 0.13.5",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -3032,6 +3038,7 @@ dependencies = [
  "rustls-platform-verifier",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "sync_wrapper",
  "tokio",
  "tokio-rustls",

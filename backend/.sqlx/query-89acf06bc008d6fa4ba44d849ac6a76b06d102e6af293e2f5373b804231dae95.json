@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE users SET email_ciphertext = $2, email_source = $3\n        WHERE id = $1 AND (\n            email_source IS NULL\n            OR $3 = 'verified'\n            OR (email_source = 'commit' AND $3 = 'public_profile')\n            OR email_source = $3\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "89acf06bc008d6fa4ba44d849ac6a76b06d102e6af293e2f5373b804231dae95"
+}

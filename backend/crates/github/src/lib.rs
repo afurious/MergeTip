@@ -5,6 +5,7 @@
 mod api;
 mod client;
 mod error;
+pub mod oauth;
 pub mod replies;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;

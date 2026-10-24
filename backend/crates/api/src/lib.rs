@@ -4,6 +4,7 @@
 //! results to the error contract in [`error`].
 
 pub mod config;
+mod cookies;
 pub mod error;
 pub mod openapi;
 pub mod routes;
@@ -12,4 +13,4 @@ pub mod state;
 pub use config::ApiConfig;
 pub use error::ApiError;
 pub use routes::router;
-pub use state::AppState;
+pub use state::{AppState, Services};

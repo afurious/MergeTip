@@ -4,8 +4,9 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use mergetip_api::{ApiConfig, AppState, openapi, router};
+use mergetip_api::{ApiConfig, AppState, Services, openapi, router};
 use mergetip_core::SystemClock;
+use mergetip_github::oauth::OAuthClient;
 use mergetip_runtime::{config::ProcessEnv, db, shutdown, telemetry};
 
 #[derive(Debug, Parser)]
@@ -42,7 +43,17 @@ async fn serve() -> anyhow::Result<()> {
     let pool = db::connect(config.database_url.expose(), 10)
         .await
         .context("cannot connect to the database")?;
-    let state = AppState::new(pool, config.clone(), Arc::new(SystemClock));
+    let oauth = OAuthClient::new(
+        config.github_client_id.clone(),
+        config.github_client_secret.clone(),
+        &config.github_oauth_url,
+        &config.github_api_url,
+    )
+    .context("cannot set up GitHub sign-in")?;
+    let services = Services {
+        oauth: Arc::new(oauth),
+    };
+    let state = AppState::new(pool, config.clone(), Arc::new(SystemClock), services);
 
     let listener = tokio::net::TcpListener::bind(config.addr)
         .await

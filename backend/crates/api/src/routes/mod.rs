@@ -1,5 +1,6 @@
 //! Route table and middleware stack.
 
+pub(crate) mod auth;
 pub(crate) mod health;
 pub(crate) mod webhooks;
 
@@ -45,6 +46,8 @@ pub fn router(state: AppState) -> Router {
 
     let v1 = Router::new()
         .route("/health", get(health::health))
+        .route("/auth/github/login", get(auth::login))
+        .route("/auth/github/callback", get(auth::callback))
         .route("/webhooks/github", post(webhooks::github));
 
     // Layers run outermost-last. CORS wraps every layer that can answer on its own (body limit,

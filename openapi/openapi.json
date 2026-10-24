@@ -32,6 +32,94 @@
         }
       }
     },
+    "/v1/auth/github/callback": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "GitHub's redirect back after sign-in: create the session and return to the web app.",
+        "operationId": "github_callback",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "description": "Set by GitHub when the user declined.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Signed in; redirect to the web app with the session cookie set"
+          },
+          "400": {
+            "description": "State mismatch or missing code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/github/login": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Start signing in: redirect to GitHub.",
+        "operationId": "github_login",
+        "parameters": [
+          {
+            "name": "redirect",
+            "in": "query",
+            "description": "Web app path to return to after signing in, e.g. `/claim/abc`. Defaults to `/dashboard`.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to GitHub"
+          }
+        }
+      }
+    },
     "/v1/health": {
       "get": {
         "tags": [
@@ -184,6 +272,10 @@
     {
       "name": "webhooks",
       "description": "Signed deliveries from external services"
+    },
+    {
+      "name": "auth",
+      "description": "Signing in and sessions"
     }
   ]
 }

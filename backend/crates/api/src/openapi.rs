@@ -8,6 +8,7 @@ use utoipa::OpenApi;
 use crate::{
     error::{ErrorBody, ErrorDetail},
     routes::{
+        auth,
         health::{self, Health},
         webhooks,
     },
@@ -20,11 +21,18 @@ use crate::{
         description = "Generated from the Rust backend with utoipa (`make openapi`). Do not edit by hand.",
         license(name = "MIT", identifier = "MIT"),
     ),
-    paths(health::healthz, health::health, webhooks::github),
+    paths(
+        health::healthz,
+        health::health,
+        webhooks::github,
+        auth::login,
+        auth::callback,
+    ),
     components(schemas(ErrorBody, ErrorDetail, Health)),
     tags(
         (name = "meta", description = "Service health"),
         (name = "webhooks", description = "Signed deliveries from external services"),
+        (name = "auth", description = "Signing in and sessions"),
     )
 )]
 pub struct ApiDoc;

@@ -10,10 +10,10 @@ use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
-use mergetip_api::{ApiConfig, AppState, router};
+use mergetip_api::{ApiConfig, AppState, Services, router};
 use mergetip_core::SystemClock;
 use mergetip_engine::{Engine, EngineSettings};
-use mergetip_github::OctocrabGitHub;
+use mergetip_github::{OctocrabGitHub, oauth::OAuthClient};
 use mergetip_worker::{
     Runner, RunnerConfig,
     handlers::{PayTipStubHandler, PostReplyHandler, ProcessEventHandler, VerifyTipHandler},
@@ -51,9 +51,27 @@ impl System {
             ("DATABASE_URL", "postgres://unused/db"),
             ("PUBLIC_BASE_URL", "https://mergetip.dev"),
             ("GITHUB_WEBHOOK_SECRET", WEBHOOK_SECRET),
+            ("API_PUBLIC_URL", "https://api.mergetip.dev"),
+            ("GITHUB_CLIENT_ID", "Iv1.e2e"),
+            ("GITHUB_CLIENT_SECRET", "e2e-client-secret"),
         ]);
         let config = Arc::new(ApiConfig::from_env(&env).unwrap());
-        let api = router(AppState::new(pool.clone(), config, Arc::new(SystemClock)));
+        let oauth = OAuthClient::new(
+            config.github_client_id.clone(),
+            config.github_client_secret.clone(),
+            &github.uri(),
+            &github.uri(),
+        )
+        .unwrap();
+        let services = Services {
+            oauth: Arc::new(oauth),
+        };
+        let api = router(AppState::new(
+            pool.clone(),
+            config,
+            Arc::new(SystemClock),
+            services,
+        ));
 
         let client = OctocrabGitHub::with_token("installation-token", &github.uri()).unwrap();
         let engine = Arc::new(Engine::new(

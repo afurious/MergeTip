@@ -3,14 +3,15 @@
   "url": "https://mergetip.dev",
   "hook_attributes": { "url": "https://api.mergetip.dev/v1/webhooks/github" },
   "redirect_url": "https://mergetip.dev/github-app/callback",
-  "callback_urls": ["https://mergetip.dev/auth/github/callback"],
+  "callback_urls": ["https://api.mergetip.dev/v1/auth/github/callback"],
   "request_oauth_on_install": false,
   "public": true,
   "default_permissions": {
     "issues": "write",
     "pull_requests": "write",
     "contents": "read",
-    "metadata": "read"
+    "metadata": "read",
+    "email_addresses": "read"
   },
   "default_events": [
     "issue_comment",

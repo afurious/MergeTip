@@ -2,6 +2,7 @@ use std::{fmt, sync::Arc};
 
 use mergetip_core::Clock;
 use mergetip_crypto::Keyring;
+use mergetip_github::oauth::GitHubOAuth;
 use mergetip_store::PgPool;
 
 use crate::ApiConfig;
@@ -14,15 +15,31 @@ struct Inner {
     pool: PgPool,
     config: Arc<ApiConfig>,
     clock: Arc<dyn Clock>,
+    services: Services,
+}
+
+/// External integrations, behind traits so tests can substitute them.
+pub struct Services {
+    pub oauth: Arc<dyn GitHubOAuth>,
 }
 
 impl AppState {
-    pub fn new(pool: PgPool, config: Arc<ApiConfig>, clock: Arc<dyn Clock>) -> Self {
+    pub fn new(
+        pool: PgPool,
+        config: Arc<ApiConfig>,
+        clock: Arc<dyn Clock>,
+        services: Services,
+    ) -> Self {
         Self(Arc::new(Inner {
             pool,
             config,
             clock,
+            services,
         }))
+    }
+
+    pub fn oauth(&self) -> &dyn GitHubOAuth {
+        self.0.services.oauth.as_ref()
     }
 
     pub fn pool(&self) -> &PgPool {

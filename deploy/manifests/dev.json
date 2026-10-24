@@ -3,14 +3,15 @@
   "url": "https://mergetip.dev",
   "hook_attributes": { "url": "https://smee.io/<channel>" },
   "redirect_url": "http://localhost:5173/github-app/callback",
-  "callback_urls": ["http://localhost:5173/auth/github/callback"],
+  "callback_urls": ["http://localhost:8080/v1/auth/github/callback"],
   "request_oauth_on_install": false,
   "public": false,
   "default_permissions": {
     "issues": "write",
     "pull_requests": "write",
     "contents": "read",
-    "metadata": "read"
+    "metadata": "read",
+    "email_addresses": "read"
   },
   "default_events": [
     "issue_comment",

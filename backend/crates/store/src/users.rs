@@ -168,3 +168,102 @@ pub async fn lock(conn: &mut PgConnection, id: UserId) -> StoreResult<()> {
     .await?;
     Ok(())
 }
+
+/// Encrypted values stored for a user. Decrypt with the AAD named on each field.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserSecrets {
+    /// AAD `users.github_token:{id}`.
+    pub github_token_ciphertext: Option<Vec<u8>>,
+    /// AAD `users.github_refresh_token:{id}`.
+    pub github_refresh_token_ciphertext: Option<Vec<u8>>,
+    pub github_token_expires_at: Option<OffsetDateTime>,
+    /// AAD `users.email:{id}`.
+    pub email_ciphertext: Option<Vec<u8>>,
+    pub email_source: Option<String>,
+}
+
+pub async fn secrets(exec: impl PgExecutor<'_>, id: UserId) -> StoreResult<UserSecrets> {
+    let row = sqlx::query_as!(
+        UserSecrets,
+        r#"
+        SELECT github_token_ciphertext, github_refresh_token_ciphertext, github_token_expires_at,
+               email_ciphertext, email_source
+        FROM users WHERE id = $1
+        "#,
+        id.as_uuid(),
+    )
+    .fetch_one(exec)
+    .await?;
+    Ok(row)
+}
+
+/// Stores the user's GitHub tokens (already encrypted). A `None` refresh token keeps the old one.
+pub async fn set_github_tokens(
+    exec: impl PgExecutor<'_>,
+    id: UserId,
+    access_ciphertext: &[u8],
+    refresh_ciphertext: Option<&[u8]>,
+    expires_at: Option<OffsetDateTime>,
+) -> StoreResult<()> {
+    sqlx::query!(
+        r#"
+        UPDATE users SET
+            github_token_ciphertext = $2,
+            github_refresh_token_ciphertext = COALESCE($3, github_refresh_token_ciphertext),
+            github_token_expires_at = $4
+        WHERE id = $1
+        "#,
+        id.as_uuid(),
+        access_ciphertext,
+        refresh_ciphertext,
+        expires_at,
+    )
+    .execute(exec)
+    .await?;
+    Ok(())
+}
+
+/// Where an email came from, best first (FR-11.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EmailSource {
+    Verified,
+    PublicProfile,
+    Commit,
+}
+
+impl EmailSource {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Verified => "verified",
+            Self::PublicProfile => "public_profile",
+            Self::Commit => "commit",
+        }
+    }
+}
+
+/// Stores an (encrypted) email. A verified email always wins; a weaker source never replaces a
+/// stronger one.
+pub async fn set_email(
+    exec: impl PgExecutor<'_>,
+    id: UserId,
+    ciphertext: &[u8],
+    source: EmailSource,
+) -> StoreResult<()> {
+    sqlx::query!(
+        r#"
+        UPDATE users SET email_ciphertext = $2, email_source = $3
+        WHERE id = $1 AND (
+            email_source IS NULL
+            OR $3 = 'verified'
+            OR (email_source = 'commit' AND $3 = 'public_profile')
+            OR email_source = $3
+        )
+        "#,
+        id.as_uuid(),
+        ciphertext,
+        source.as_str(),
+    )
+    .execute(exec)
+    .await?;
+    Ok(())
+}
