@@ -18,6 +18,7 @@ Connect (NWC), and receivers get paid to their own Lightning address.
 │   │   ├── api/             # axum HTTP server: routes, auth, webhook endpoints
 │   │   ├── worker/          # job runner: payments, retries, expiry, emails
 │   │   ├── core/            # domain types, tip state machine, errors
+│   │   ├── engine/          # tip use cases: events, verification, payment, replies
 │   │   ├── parser/          # /tip command grammar (pure, no I/O)
 │   │   ├── github/          # octocrab wrapper: App auth, verifier, bot replies
 │   │   ├── payer/           # NWC client, LNURL resolver, invoice validation
@@ -25,8 +26,9 @@ Connect (NWC), and receivers get paid to their own Lightning address.
 │   │   ├── notify/          # email (Resend/Postmark) + templates
 │   │   ├── store/           # sqlx repositories, job queue
 │   │   ├── crypto/          # envelope encryption, HMAC helpers, Redacted<T>
-│   │   └── runtime/         # config, tracing, database pool, shutdown (shared by binaries)
-│   ├── devtools/            # mock NWC wallet + mock LNURL server for local dev and tests
+│   │   ├── runtime/         # config, tracing, database pool, shutdown (shared by binaries)
+│   │   └── e2e/             # end-to-end tests: real api + worker, mock GitHub
+│   ├── devtools/            # mock NWC wallet, mock LNURL server, dev GitHub App setup
 │   ├── migrations/          # SQL migrations (sqlx)
 │   └── Dockerfile           # builds any backend binary (BIN build arg)
 ├── frontend/                # TypeScript (pnpm workspace)
