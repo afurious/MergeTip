@@ -229,7 +229,34 @@ pub async fn lock_for_update(conn: &mut PgConnection, id: TipId) -> StoreResult<
     .try_into()
 }
 
-/// Moves a tip from `from` to `to` and records why in `tip_events.detail`.
+/// Columns written together with a state change. `None` leaves a column as it is, so a
+/// transition can only ever add facts (who the receiver is, why it was rejected, the payment
+/// proof), never erase them.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct TipPatch {
+    pub receiver_id: Option<UserId>,
+    pub verified_by: Option<Value>,
+    pub error_code: Option<String>,
+    pub error_detail: Option<String>,
+    pub expires_at: Option<OffsetDateTime>,
+    pub confirm_expires_at: Option<OffsetDateTime>,
+    pub payment_hash: Option<String>,
+    pub preimage: Option<String>,
+}
+
+impl TipPatch {
+    /// The patch for a rejection or failure: a stable `snake_case` code plus optional detail.
+    pub fn error(code: impl Into<String>, detail: Option<String>) -> Self {
+        Self {
+            error_code: Some(code.into()),
+            error_detail: detail,
+            ..Self::default()
+        }
+    }
+}
+
+/// Moves a tip from `from` to `to`, applies `patch` in the same statement, and records why in
+/// `tip_events.detail`.
 ///
 /// Fails with [`StoreError::IllegalTransition`] before touching the database if the state
 /// machine forbids the change, and with [`StoreError::Conflict`] if the tip is no longer in
@@ -240,6 +267,7 @@ pub async fn transition(
     id: TipId,
     from: TipState,
     to: TipState,
+    patch: &TipPatch,
     detail: Value,
 ) -> StoreResult<Tip> {
     mergetip_core::transition(from, to)?;
@@ -248,13 +276,31 @@ pub async fn transition(
     let row = sqlx::query_as!(
         TipRow,
         r#"
-        UPDATE tips SET state = $3, version = version + 1
+        UPDATE tips SET
+            state = $3,
+            version = version + 1,
+            receiver_id = COALESCE($4, receiver_id),
+            verified_by = COALESCE($5, verified_by),
+            error_code = COALESCE($6, error_code),
+            error_detail = COALESCE($7, error_detail),
+            expires_at = COALESCE($8, expires_at),
+            confirm_expires_at = COALESCE($9, confirm_expires_at),
+            payment_hash = COALESCE($10, payment_hash),
+            preimage = COALESCE($11, preimage)
         WHERE id = $1 AND state = $2
         RETURNING *
         "#,
         id.as_uuid(),
         from.as_str(),
         to.as_str(),
+        patch.receiver_id.map(|id| id.as_uuid()),
+        patch.verified_by,
+        patch.error_code,
+        patch.error_detail,
+        patch.expires_at,
+        patch.confirm_expires_at,
+        patch.payment_hash,
+        patch.preimage,
     )
     .fetch_optional(&mut *tx)
     .await?;
@@ -285,6 +331,54 @@ pub async fn transition(
     tx.commit().await?;
     tracing::debug!(tip_id = %id, %from, %to, "tip transitioned");
     row.try_into()
+}
+
+/// Live tips the sender created since `since`, other than `exclude`. Rejected tips don't count,
+/// so a burst of invalid commands can't lock a sender out.
+pub async fn count_by_sender_since(
+    exec: impl PgExecutor<'_>,
+    sender: UserId,
+    since: OffsetDateTime,
+    exclude: TipId,
+) -> StoreResult<i64> {
+    let count = sqlx::query_scalar!(
+        r#"
+        SELECT count(*) AS "n!" FROM tips
+        WHERE sender_id = $1 AND created_at >= $2 AND id <> $3 AND state <> 'rejected'
+        "#,
+        sender.as_uuid(),
+        since,
+        exclude.as_uuid(),
+    )
+    .fetch_one(exec)
+    .await?;
+    Ok(count)
+}
+
+/// Live tips from `sender` to `receiver_login` in one thread, other than `exclude`.
+pub async fn count_for_pair_in_thread(
+    exec: impl PgExecutor<'_>,
+    sender: UserId,
+    receiver_login: &str,
+    thread: &ThreadRef,
+    exclude: TipId,
+) -> StoreResult<i64> {
+    let thread_number = i32::try_from(thread.number).map_err(corrupt)?;
+    let count = sqlx::query_scalar!(
+        r#"
+        SELECT count(*) AS "n!" FROM tips
+        WHERE sender_id = $1 AND lower(receiver_login) = lower($2)
+          AND repo = $3 AND thread_number = $4 AND id <> $5 AND state <> 'rejected'
+        "#,
+        sender.as_uuid(),
+        receiver_login,
+        thread.full_name(),
+        thread_number,
+        exclude.as_uuid(),
+    )
+    .fetch_one(exec)
+    .await?;
+    Ok(count)
 }
 
 /// The audit trail for one tip, oldest first.

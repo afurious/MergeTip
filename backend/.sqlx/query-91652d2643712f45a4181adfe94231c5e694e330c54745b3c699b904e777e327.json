@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT count(*) AS \"n!\" FROM tips\n        WHERE sender_id = $1 AND lower(receiver_login) = lower($2)\n          AND repo = $3 AND thread_number = $4 AND id <> $5 AND state <> 'rejected'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "n!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Int4",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "91652d2643712f45a4181adfe94231c5e694e330c54745b3c699b904e777e327"
+}

@@ -9,6 +9,7 @@ pub mod installations;
 pub mod jobs;
 pub mod tips;
 pub mod users;
+pub mod wallets;
 
 pub use error::{StoreError, StoreResult};
 pub use sqlx::PgPool;
