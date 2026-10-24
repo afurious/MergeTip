@@ -237,7 +237,14 @@ fn write_private(dir: &Path, path: &Path, contents: &[u8]) -> anyhow::Result<()>
     options
         .open(path)
         .and_then(|mut file| file.write_all(contents))
-        .with_context(|| format!("cannot write {}", path.display()))
+        .with_context(|| format!("cannot write {}", path.display()))?;
+    // `mode` only applies when the file is created; tighten an existing key file too.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+    }
+    Ok(())
 }
 
 fn html_escape(text: &str) -> String {
@@ -295,6 +302,9 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let dir = std::env::temp_dir().join(format!("dev-app-key-{}", std::process::id()));
         let path = dir.join("github-app.pem");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(&path, b"old").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
         write_private(&dir, &path, b"-----BEGIN KEY-----").unwrap();
         let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600);
