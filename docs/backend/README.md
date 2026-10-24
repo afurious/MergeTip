@@ -19,6 +19,14 @@ make dev-api                         # http://localhost:8080/v1/health
 make dev-worker                      # claims jobs from Postgres
 ```
 
+To receive real webhooks, create a personal GitHub App once:
+
+```sh
+# 1. Create a webhook proxy channel at https://smee.io/new and put it in .env as SMEE_URL.
+make dev-app        # opens a local page; approve the App on GitHub; writes .env and .secrets/
+make smee           # forwards deliveries to the local api
+```
+
 If port 5432 is already taken on your machine, set `POSTGRES_PORT` in `.env` (e.g. `5435`) and
 point `DATABASE_URL` at the same port.
 

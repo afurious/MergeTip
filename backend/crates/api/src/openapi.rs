@@ -7,7 +7,10 @@ use utoipa::OpenApi;
 
 use crate::{
     error::{ErrorBody, ErrorDetail},
-    routes::health::{self, Health},
+    routes::{
+        health::{self, Health},
+        webhooks,
+    },
 };
 
 #[derive(OpenApi)]
@@ -17,9 +20,12 @@ use crate::{
         description = "Generated from the Rust backend with utoipa (`make openapi`). Do not edit by hand.",
         license(name = "MIT", identifier = "MIT"),
     ),
-    paths(health::healthz, health::health),
+    paths(health::healthz, health::health, webhooks::github),
     components(schemas(ErrorBody, ErrorDetail, Health)),
-    tags((name = "meta", description = "Service health"))
+    tags(
+        (name = "meta", description = "Service health"),
+        (name = "webhooks", description = "Signed deliveries from external services"),
+    )
 )]
 pub struct ApiDoc;
 
@@ -39,7 +45,7 @@ mod tests {
     #[test]
     fn documents_every_route() {
         let doc = ApiDoc::openapi();
-        for path in ["/healthz", "/v1/health"] {
+        for path in ["/healthz", "/v1/health", "/v1/webhooks/github"] {
             assert!(
                 doc.paths.paths.contains_key(path),
                 "{path} missing from OpenAPI"

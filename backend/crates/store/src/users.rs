@@ -156,3 +156,15 @@ pub async fn get_by_login(exec: impl PgExecutor<'_>, login: &str) -> StoreResult
     .await?
     .try_into()
 }
+
+/// Holds the user's row lock until the caller's transaction ends. Used to serialise per-user
+/// limit checks (count, then insert) so concurrent requests can't both pass on a stale count.
+pub async fn lock(conn: &mut PgConnection, id: UserId) -> StoreResult<()> {
+    sqlx::query!(
+        "SELECT id FROM users WHERE id = $1 FOR UPDATE",
+        id.as_uuid()
+    )
+    .fetch_one(conn)
+    .await?;
+    Ok(())
+}

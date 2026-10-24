@@ -1,0 +1,12 @@
+---
+source: crates/parser/tests/grammar.rs
+expression: "rendered.join(\"\\n\")"
+---
+Say who to tip, starting with @, e.g. `/tip @alice 2100`.
+`a--b` isn't a valid GitHub username: use letters, digits and single hyphens, up to 39 characters.
+Add an amount in sats after the username, e.g. `2100` or `2.1k`.
+`2,100` isn't an amount: use whole sats like `2100`, or `k` for thousands like `2.1k` (up to 3 decimals).
+Tips must be between 1 sat and 100,000,000 sats.
+Keep the note after `for` to 140 characters.
+`@bob` isn't understood here. One receiver per command: put each tip on its own line, and write the note after `for`.
+Only 5 tips are allowed per comment; post the rest in another comment.

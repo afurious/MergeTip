@@ -1,0 +1,28 @@
+[package]
+name = "mergetip-e2e"
+description = "End-to-end tests: the real api and worker against Postgres and a mock GitHub"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+mergetip-api.workspace = true
+mergetip-core.workspace = true
+mergetip-crypto.workspace = true
+mergetip-engine.workspace = true
+mergetip-github.workspace = true
+mergetip-store.workspace = true
+mergetip-worker.workspace = true
+axum.workspace = true
+hex.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tower.workspace = true
+wiremock.workspace = true

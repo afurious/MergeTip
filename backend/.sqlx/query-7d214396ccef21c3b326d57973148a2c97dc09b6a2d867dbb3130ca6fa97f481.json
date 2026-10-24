@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        UPDATE tips SET state = $3, version = version + 1\n        WHERE id = $1 AND state = $2\n        RETURNING *\n        ",
+  "query": "\n        UPDATE tips SET\n            state = $3,\n            version = version + 1,\n            receiver_id = COALESCE($4, receiver_id),\n            verified_by = COALESCE($5, verified_by),\n            error_code = COALESCE($6, error_code),\n            error_detail = COALESCE($7, error_detail),\n            expires_at = COALESCE($8, expires_at),\n            confirm_expires_at = COALESCE($9, confirm_expires_at),\n            payment_hash = COALESCE($10, payment_hash),\n            preimage = COALESCE($11, preimage)\n        WHERE id = $1 AND state = $2\n        RETURNING *\n        ",
   "describe": {
     "columns": [
       {
@@ -327,6 +327,14 @@
       "Left": [
         "Uuid",
         "Text",
+        "Text",
+        "Uuid",
+        "Jsonb",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
         "Text"
       ]
     },
@@ -362,5 +370,5 @@
       false
     ]
   },
-  "hash": "b192bfe2d02b221ba9f3b2e362b2c9bdbadffbefc7f073f264c5bd4cdf43d1d8"
+  "hash": "7d214396ccef21c3b326d57973148a2c97dc09b6a2d867dbb3130ca6fa97f481"
 }

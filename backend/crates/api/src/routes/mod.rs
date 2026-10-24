@@ -1,6 +1,7 @@
 //! Route table and middleware stack.
 
 pub(crate) mod health;
+pub(crate) mod webhooks;
 
 use std::time::Duration;
 
@@ -10,7 +11,7 @@ use axum::{
     http::{HeaderName, Method, StatusCode, header},
     middleware,
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
 };
 use tower_http::{
     cors::CorsLayer,
@@ -42,7 +43,9 @@ pub fn router(state: AppState) -> Router {
         .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
         .max_age(Duration::from_secs(3600));
 
-    let v1 = Router::new().route("/health", get(health::health));
+    let v1 = Router::new()
+        .route("/health", get(health::health))
+        .route("/webhooks/github", post(webhooks::github));
 
     // Layers run outermost-last. CORS wraps every layer that can answer on its own (body limit,
     // timeout) and the error normaliser, so even those responses reach the browser readable and

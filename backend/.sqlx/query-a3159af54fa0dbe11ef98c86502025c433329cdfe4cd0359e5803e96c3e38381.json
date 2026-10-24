@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT github_comment_id, lines FROM bot_comments\n        WHERE repo = $1 AND thread_number = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "github_comment_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "bot_comments",
+            "name": "github_comment_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "lines",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "bot_comments",
+            "name": "lines"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "a3159af54fa0dbe11ef98c86502025c433329cdfe4cd0359e5803e96c3e38381"
+}

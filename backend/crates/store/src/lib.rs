@@ -3,12 +3,15 @@
 //! Functions take `impl PgExecutor` when they run a single statement (pass a pool or a
 //! transaction) and `&mut PgConnection` when they need their own nested transaction.
 
+pub mod bot_comments;
 mod error;
 pub mod github_events;
 pub mod installations;
 pub mod jobs;
+pub mod sent_replies;
 pub mod tips;
 pub mod users;
+pub mod wallets;
 
 pub use error::{StoreError, StoreResult};
 pub use sqlx::PgPool;

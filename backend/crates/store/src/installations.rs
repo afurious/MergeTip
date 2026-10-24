@@ -64,6 +64,43 @@ pub async fn upsert(
     Ok(row.into())
 }
 
+/// Records an installation if it is new, without touching an existing row's suspension. Use for
+/// events that say nothing about whether the App is active.
+pub async fn ensure(
+    exec: impl PgExecutor<'_>,
+    github_installation_id: GithubInstallationId,
+    account_login: &str,
+) -> StoreResult<Installation> {
+    let row = sqlx::query_as!(
+        InstallationRow,
+        r#"
+        INSERT INTO installations (github_installation_id, account_login)
+        VALUES ($1, $2)
+        ON CONFLICT (github_installation_id) DO UPDATE SET account_login = EXCLUDED.account_login
+        RETURNING id, github_installation_id, account_login, suspended_at
+        "#,
+        github_installation_id.get(),
+        account_login,
+    )
+    .fetch_one(exec)
+    .await?;
+    Ok(row.into())
+}
+
+pub async fn get(exec: impl PgExecutor<'_>, id: InstallationId) -> StoreResult<Installation> {
+    let row = sqlx::query_as!(
+        InstallationRow,
+        r#"
+        SELECT id, github_installation_id, account_login, suspended_at
+        FROM installations WHERE id = $1
+        "#,
+        id.as_uuid(),
+    )
+    .fetch_one(exec)
+    .await?;
+    Ok(row.into())
+}
+
 pub async fn get_by_github_id(
     exec: impl PgExecutor<'_>,
     github_installation_id: GithubInstallationId,

@@ -19,7 +19,17 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 
 ## M2: GitHub App core
 
-Not started.
+- [x] 2.1 Parser
+- [x] 2.2 Webhook endpoint
+- [x] 2.3 `github` client
+- [x] 2.4 `engine` crate and event processing
+- [x] 2.5 Tip creation
+- [x] 2.6 Verifier and decision
+- [x] 2.7 Bot replies
+- [x] 2.8 Stub payer
+- [x] 2.9 End-to-end harness
+- [x] 2.10 Dev App helper
+- [x] Handover
 
 ## M3: Auth and payments
 

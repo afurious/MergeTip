@@ -15,6 +15,7 @@ mergetip-core.workspace = true
 mergetip-github.workspace = true
 mergetip-store.workspace = true
 mergetip-crypto.workspace = true
+mergetip-engine.workspace = true
 mergetip-runtime.workspace = true
 anyhow.workspace = true
 axum.workspace = true
@@ -22,6 +23,7 @@ clap.workspace = true
 dotenvy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sqlx.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
@@ -31,3 +33,4 @@ utoipa.workspace = true
 
 [dev-dependencies]
 tower.workspace = true
+hex.workspace = true
