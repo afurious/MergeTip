@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT payment_hash, preimage, verified_by, receiver_id FROM tips",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "payment_hash",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "payment_hash"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "preimage",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "preimage"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "verified_by",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "verified_by"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "receiver_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "receiver_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "fdf7575d620e75a2ea3befaa4d23d8495de1ccd393a0d2412128ac8c95533356"
+}

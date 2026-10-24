@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO bot_comments (repo, thread_number, github_comment_id, lines)\n        VALUES ($1, $2, $3, $4)\n        ON CONFLICT (repo, thread_number) DO UPDATE SET\n            github_comment_id = EXCLUDED.github_comment_id,\n            lines = EXCLUDED.lines\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4",
+        "Int8",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "512759c9197214dd27d191a965f027372101235e61e592af2d9ce10145ab69af"
+}

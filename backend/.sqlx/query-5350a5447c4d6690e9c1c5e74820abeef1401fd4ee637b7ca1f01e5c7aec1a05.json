@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO users (github_id, github_login, per_tip_max_sats) VALUES (10, 'maintainer', 1000000)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "5350a5447c4d6690e9c1c5e74820abeef1401fd4ee637b7ca1f01e5c7aec1a05"
+}
