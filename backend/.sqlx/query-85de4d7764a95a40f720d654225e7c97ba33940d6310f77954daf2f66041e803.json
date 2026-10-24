@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COALESCE(sum(a.amount_msat), 0)::bigint AS \"total!\"\n        FROM payment_attempts a JOIN tips t ON t.id = a.tip_id\n        WHERE t.sender_id = $1 AND a.started_at >= $2\n          AND a.status IN ('pending', 'unknown', 'succeeded')\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "85de4d7764a95a40f720d654225e7c97ba33940d6310f77954daf2f66041e803"
+}
