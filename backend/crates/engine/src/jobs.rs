@@ -23,7 +23,7 @@ pub trait JobPayload: Serialize + DeserializeOwned {
     /// Decodes a claimed job's payload. `None` means the payload is malformed: retrying cannot
     /// fix it, so the handler should fail the job permanently.
     fn decode(payload: &serde_json::Value) -> Option<Self> {
-        serde_json::from_value(payload.clone()).ok()
+        Self::deserialize(payload).ok()
     }
 }
 

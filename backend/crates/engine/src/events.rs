@@ -135,6 +135,6 @@ fn to_repos(repos: &[mergetip_github::webhook::EventRepo]) -> Vec<InstallationRe
 }
 
 fn parse<T: DeserializeOwned>(payload: &serde_json::Value) -> Result<T, EngineError> {
-    serde_json::from_value(payload.clone())
+    T::deserialize(payload)
         .map_err(|err| EngineError::Malformed(format!("unexpected payload shape: {err}")))
 }
