@@ -15,7 +15,7 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 - [x] 1.9 `api` router and error model
 - [x] 1.10 OpenAPI pipeline
 - [x] 1.11 Layering ADR and backend README
-- [ ] Handover
+- [x] Handover
 
 ## M2: GitHub App core
 
