@@ -12,8 +12,9 @@ use time::macros::datetime;
 
 #[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
 async fn user_upsert_follows_renames_and_keeps_known_fields(pool: PgPool) -> sqlx::Result<()> {
+    let mut conn = pool.acquire().await?;
     let created = users::upsert_by_github_id(
-        &pool,
+        &mut conn,
         &GithubProfile {
             github_id: GithubUserId::new(42),
             login: "Alice".into(),
@@ -28,7 +29,7 @@ async fn user_upsert_follows_renames_and_keeps_known_fields(pool: PgPool) -> sql
     assert_eq!(created.confirm_threshold.get(), 50_000);
 
     let renamed = users::upsert_by_github_id(
-        &pool,
+        &mut conn,
         &GithubProfile {
             github_id: GithubUserId::new(42),
             login: "alice-renamed".into(),
@@ -61,6 +62,63 @@ async fn user_upsert_follows_renames_and_keeps_known_fields(pool: PgPool) -> sql
         Err(StoreError::NotFound)
     ));
     assert_eq!(users::get(&pool, created.id).await.unwrap(), renamed);
+    Ok(())
+}
+
+fn profile(github_id: i64, login: &str) -> GithubProfile {
+    GithubProfile {
+        github_id: GithubUserId::new(github_id),
+        login: login.into(),
+        avatar_url: None,
+        created_at: None,
+    }
+}
+
+/// Account A was `alice`, renamed, and account B took `alice`. A's stale row must never answer
+/// for `alice` again, even after A's row is updated.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn reused_login_resolves_to_its_current_holder(pool: PgPool) -> sqlx::Result<()> {
+    let mut conn = pool.acquire().await?;
+    let a = users::upsert_by_github_id(&mut conn, &profile(1, "alice"))
+        .await
+        .unwrap();
+    let b = users::upsert_by_github_id(&mut conn, &profile(2, "Alice"))
+        .await
+        .unwrap();
+
+    // A write to A's stale row (a settings change, say) must not make it win again.
+    sqlx::query!(
+        "UPDATE users SET lightning_address = 'a@example.com' WHERE id = $1",
+        a.id.as_uuid()
+    )
+    .execute(&pool)
+    .await?;
+    assert_eq!(users::get_by_login(&pool, "alice").await.unwrap().id, b.id);
+
+    // When A is seen again under its new login, it becomes current for that login.
+    users::upsert_by_github_id(&mut conn, &profile(1, "alice-renamed"))
+        .await
+        .unwrap();
+    assert_eq!(
+        users::get_by_login(&pool, "alice-renamed").await.unwrap().id,
+        a.id
+    );
+    assert_eq!(users::get_by_login(&pool, "alice").await.unwrap().id, b.id);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn two_current_rows_cannot_share_a_login(pool: PgPool) -> sqlx::Result<()> {
+    let mut conn = pool.acquire().await?;
+    users::upsert_by_github_id(&mut conn, &profile(1, "alice"))
+        .await
+        .unwrap();
+    let duplicate = sqlx::query!(
+        "INSERT INTO users (github_id, github_login) VALUES (2, 'ALICE')"
+    )
+    .execute(&pool)
+    .await;
+    assert!(duplicate.is_err(), "the unique index must reject a second current holder");
     Ok(())
 }
 

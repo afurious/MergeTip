@@ -18,7 +18,7 @@ email deliveries (M4), and fiat payout tables (M5) arrive later as separate addi
 
 | Table | Purpose | Key constraints |
 | --- | --- | --- |
-| `users` | One row per GitHub account, sender or receiver, plus their caps and settings | `github_id` unique; caps `> 0`; `confirm_threshold_sats >= 1000` |
+| `users` | One row per GitHub account, sender or receiver, plus their caps and settings | `github_id` unique; one current (non-stale) row per login; caps `> 0`; `confirm_threshold_sats >= 1000` |
 | `installations` / `installation_repos` | Where the App is installed; cached `.github/mergetip.yml` | `github_installation_id` unique |
 | `github_events` | Raw webhook deliveries | `delivery_id` primary key (deduplicates redeliveries) |
 | `wallet_connections` | Encrypted NWC connection per sender | At most one row per user with `revoked_at IS NULL` |
@@ -46,6 +46,14 @@ WHERE id = $id AND state = $from
 If no row is updated, another worker got there first, and the caller gets `Conflict`. The
 `tip_events` row is written in the same transaction, so the audit log can never disagree with the
 tip.
+
+### Logins
+
+GitHub logins can be renamed and reused, so `github_id` is the identity and `github_login` is
+only the last login we saw. When an account is seen with a login, every other row holding it is
+marked `login_stale` (migration `users_login_stale`), and a partial unique index allows one
+current holder per login. Login lookups ignore stale rows. Money is still routed by GitHub ID,
+resolved through the GitHub API.
 
 ### Idempotency
 

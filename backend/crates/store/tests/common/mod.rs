@@ -11,8 +11,9 @@ use mergetip_store::{
 use sqlx::PgPool;
 
 pub async fn user(pool: &PgPool, github_id: i64, login: &str) -> User {
+    let mut conn = pool.acquire().await.unwrap();
     users::upsert_by_github_id(
-        pool,
+        &mut conn,
         &GithubProfile {
             github_id: GithubUserId::new(github_id),
             login: login.to_owned(),

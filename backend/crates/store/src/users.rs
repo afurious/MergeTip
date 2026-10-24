@@ -1,7 +1,7 @@
 //! `users`: one row per GitHub account, created the first time we see it as sender or receiver.
 
 use mergetip_core::{GithubUserId, Sats, UserId};
-use sqlx::PgExecutor;
+use sqlx::{Acquire, PgConnection, PgExecutor};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
@@ -75,10 +75,25 @@ impl TryFrom<UserRow> for User {
 
 /// Inserts the account or refreshes its login and avatar. Keyed on `github_id` because logins
 /// can be renamed and later reused by someone else.
+///
+/// Seeing this account with a login proves no other account holds that login any more, so in the
+/// same transaction every other row with it is marked stale. [`get_by_login`] ignores stale rows,
+/// and a unique index guarantees one current holder per login.
 pub async fn upsert_by_github_id(
-    exec: impl PgExecutor<'_>,
+    conn: &mut PgConnection,
     profile: &GithubProfile,
 ) -> StoreResult<User> {
+    let mut tx = conn.begin().await?;
+    sqlx::query!(
+        r#"
+        UPDATE users SET login_stale = true
+        WHERE lower(github_login) = lower($1) AND github_id <> $2 AND NOT login_stale
+        "#,
+        profile.login,
+        profile.github_id.get(),
+    )
+    .execute(&mut *tx)
+    .await?;
     let row = sqlx::query_as!(
         UserRow,
         r#"
@@ -86,6 +101,7 @@ pub async fn upsert_by_github_id(
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (github_id) DO UPDATE SET
             github_login = EXCLUDED.github_login,
+            login_stale = false,
             avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url),
             github_created_at = COALESCE(EXCLUDED.github_created_at, users.github_created_at)
         RETURNING id, github_id, github_login, avatar_url, github_created_at, lightning_address,
@@ -97,8 +113,9 @@ pub async fn upsert_by_github_id(
         profile.avatar_url,
         profile.created_at,
     )
-    .fetch_one(exec)
+    .fetch_one(&mut *tx)
     .await?;
+    tx.commit().await?;
     row.try_into()
 }
 
@@ -118,7 +135,11 @@ pub async fn get(exec: impl PgExecutor<'_>, id: UserId) -> StoreResult<User> {
     .try_into()
 }
 
-/// Case-insensitive lookup of a live (not deleted) account by its current login.
+/// Case-insensitive lookup of the account that currently holds `login`: not deleted, and not a
+/// row whose login has since been taken by another account.
+///
+/// Our copy of a login can lag GitHub (we only learn of a rename when we next see the account),
+/// so anything that moves money must still resolve the receiver through the GitHub API by ID.
 pub async fn get_by_login(exec: impl PgExecutor<'_>, login: &str) -> StoreResult<User> {
     sqlx::query_as!(
         UserRow,
@@ -127,9 +148,7 @@ pub async fn get_by_login(exec: impl PgExecutor<'_>, login: &str) -> StoreResult
                per_tip_max_sats, daily_max_sats, confirm_threshold_sats, confirm_otp_enabled,
                email_opt_out, created_at, deleted_at
         FROM users
-        WHERE lower(github_login) = lower($1) AND deleted_at IS NULL
-        ORDER BY updated_at DESC
-        LIMIT 1
+        WHERE lower(github_login) = lower($1) AND NOT login_stale AND deleted_at IS NULL
         "#,
         login,
     )

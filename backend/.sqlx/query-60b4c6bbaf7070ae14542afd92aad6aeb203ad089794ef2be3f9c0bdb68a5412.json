@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO users (github_id, github_login, avatar_url, github_created_at)\n        VALUES ($1, $2, $3, $4)\n        ON CONFLICT (github_id) DO UPDATE SET\n            github_login = EXCLUDED.github_login,\n            avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url),\n            github_created_at = COALESCE(EXCLUDED.github_created_at, users.github_created_at)\n        RETURNING id, github_id, github_login, avatar_url, github_created_at, lightning_address,\n                  per_tip_max_sats, daily_max_sats, confirm_threshold_sats, confirm_otp_enabled,\n                  email_opt_out, created_at, deleted_at\n        ",
+  "query": "\n        SELECT id, github_id, github_login, avatar_url, github_created_at, lightning_address,\n               per_tip_max_sats, daily_max_sats, confirm_threshold_sats, confirm_otp_enabled,\n               email_opt_out, created_at, deleted_at\n        FROM users\n        WHERE lower(github_login) = lower($1) AND NOT login_stale AND deleted_at IS NULL\n        ",
   "describe": {
     "columns": [
       {
@@ -149,10 +149,7 @@
     ],
     "parameters": {
       "Left": [
-        "Int8",
-        "Text",
-        "Text",
-        "Timestamptz"
+        "Text"
       ]
     },
     "nullable": [
@@ -171,5 +168,5 @@
       true
     ]
   },
-  "hash": "fcbfddcc1447aa4b24d69cdd3431a064dd6eaed9adbc6400295c9284d5b99ee3"
+  "hash": "60b4c6bbaf7070ae14542afd92aad6aeb203ad089794ef2be3f9c0bdb68a5412"
 }
