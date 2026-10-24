@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO feature_flags (key, enabled) VALUES ($1, $2)\n        ON CONFLICT (key) DO UPDATE SET enabled = EXCLUDED.enabled\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "04a844ff5c282f81f146730a476154ed094d9d06a6416d42ef7c6dcf2a799144"
+}

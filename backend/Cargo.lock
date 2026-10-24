@@ -2046,12 +2046,15 @@ dependencies = [
 name = "mergetip-engine"
 version = "0.1.0"
 dependencies = [
+ "futures",
  "hex",
  "mergetip-core",
  "mergetip-crypto",
  "mergetip-github",
  "mergetip-parser",
+ "mergetip-payer",
  "mergetip-store",
+ "nostr-sdk",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -2060,6 +2063,8 @@ dependencies = [
  "time",
  "tokio",
  "tracing",
+ "uuid",
+ "wiremock",
 ]
 
 [[package]]

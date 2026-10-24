@@ -1,0 +1,14 @@
+---
+source: crates/github/src/replies.rs
+expression: "rendered.join(\"\\n\")"
+---
+quota_exceeded: 😕 @maintainer, your wallet's budget is used up, so the **2,100 sats** tip to @reviewer wasn't sent. Raise the budget in your wallet, then tip again.
+insufficient_balance: 😕 @maintainer, your wallet doesn't have enough sats for the **2,100 sats** tip to @reviewer. Top it up, then tip again.
+restricted: 😕 @maintainer, MergeTip isn't allowed to pay from your wallet any more. [Reconnect your wallet](https://mergetip.dev/settings/wallet), then tip again.
+not_implemented: 😕 @maintainer, your wallet can't pay invoices over this connection. [Connect a different wallet](https://mergetip.dev/settings/wallet).
+no_wallet: 😕 @maintainer, your wallet was disconnected before this tip could be paid. [Connect a wallet](https://mergetip.dev/settings/wallet), then tip again.
+daily_cap_reached: 😕 @maintainer, this tip would take you over your daily limit of **50,000 sats**. [Manage limits](https://mergetip.dev/settings/limits).
+over_per_tip_cap: 😕 @maintainer, **2,100 sats** is above your per-tip limit of **10,000 sats**. [Manage limits](https://mergetip.dev/settings/limits).
+receiver_unpayable: 😕 @maintainer, @reviewer's Lightning address couldn't accept this payment, so nothing was sent.
+payment_failed: 😕 @maintainer, the **2,100 sats** tip to @reviewer couldn't be paid. Nothing was charged; please try again later.
+⚡ @reviewer, @maintainer sent you **2,100 sats** for the docs. Nothing has been charged yet: add a Lightning address to receive it → [Receive sats](https://mergetip.dev/settings/receive)

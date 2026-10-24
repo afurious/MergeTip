@@ -4,13 +4,15 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use mergetip_core::SystemClock;
-use mergetip_engine::{Engine, EngineSettings};
+use mergetip_engine::{Engine, EngineSettings, Payments};
 use mergetip_github::OctocrabGitHub;
+use mergetip_payer::{LnurlClient, nwc::NwcConnector};
 use mergetip_runtime::{config::ProcessEnv, db, shutdown, telemetry};
 use mergetip_worker::{
     Runner, WorkerConfig,
     handlers::{
-        NoopHandler, PayTipStubHandler, PostReplyHandler, ProcessEventHandler, VerifyTipHandler,
+        NoopHandler, PayTipHandler, PostReplyHandler, ProcessEventHandler, ReconcilePaymentHandler,
+        VerifyTipHandler,
     },
 };
 
@@ -36,26 +38,37 @@ async fn main() -> anyhow::Result<()> {
     .context("cannot set up the GitHub App client")?;
 
     let clock = Arc::new(SystemClock);
+    // Plain-HTTP Lightning addresses are only for the local mock server.
+    let receivers = LnurlClient::new(
+        config.lightning_network,
+        config.app_env.is_dev(),
+        clock.clone(),
+    )
+    .context("cannot set up the LNURL client")?;
     let engine = Arc::new(Engine::new(
         pool.clone(),
         Arc::new(github),
         clock.clone(),
-        EngineSettings {
-            web_base_url: config.web_base_url.clone(),
-            stub_payer: config.stub_payer,
+        EngineSettings::new(config.web_base_url.clone(), config.stub_payer),
+        Payments {
+            receivers: Arc::new(receivers),
+            wallets: Arc::new(NwcConnector),
+            keyring: config.keyring.clone(),
         },
     ));
 
-    let mut runner = Runner::new(pool, clock, config.runner)
+    if config.stub_payer {
+        tracing::warn!("STUB_PAYER is on: tips are marked paid without moving any money");
+    }
+    Runner::new(pool, clock, config.runner)
         .context("cannot initialise the job runner")?
         .register(NoopHandler)
         .register(ProcessEventHandler(engine.clone()))
         .register(VerifyTipHandler(engine.clone()))
-        .register(PostReplyHandler(engine.clone()));
-    if config.stub_payer {
-        tracing::warn!("STUB_PAYER is on: tips are marked paid without moving any money");
-        runner = runner.register(PayTipStubHandler(engine));
-    }
-    runner.run(shutdown::on_signal()).await;
+        .register(PostReplyHandler(engine.clone()))
+        .register(PayTipHandler(engine.clone()))
+        .register(ReconcilePaymentHandler(engine))
+        .run(shutdown::on_signal())
+        .await;
     Ok(())
 }

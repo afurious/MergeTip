@@ -5,6 +5,7 @@
 
 pub mod bot_comments;
 mod error;
+pub mod feature_flags;
 pub mod github_events;
 pub mod installations;
 pub mod jobs;

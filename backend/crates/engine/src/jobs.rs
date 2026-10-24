@@ -71,6 +71,17 @@ impl JobPayload for PayTip {
     const KIND: &'static str = "pay_tip";
 }
 
+/// Settle the fate of a payment attempt whose outcome is unknown (the wallet didn't answer).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReconcilePayment {
+    pub tip_id: TipId,
+    pub attempt_id: uuid::Uuid,
+}
+
+impl JobPayload for ReconcilePayment {
+    const KIND: &'static str = "reconcile_payment";
+}
+
 /// Write something in a GitHub thread. Rendering happens when the job runs, from the tip's
 /// current data, so a retried reply never shows stale facts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -109,6 +120,10 @@ pub enum TipMessage {
     Rejected,
     Held,
     Paid,
+    /// The receiver has no Lightning address: the tip waits for them.
+    Pledged,
+    /// A verified tip couldn't be paid (`tips.error_code` says why).
+    Failed,
 }
 
 impl TipMessage {
@@ -126,6 +141,8 @@ impl TipMessage {
             Self::Rejected => "rejected",
             Self::Held => "held",
             Self::Paid => "paid",
+            Self::Pledged => "pledged",
+            Self::Failed => "failed",
         }
     }
 }

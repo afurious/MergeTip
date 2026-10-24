@@ -12,12 +12,12 @@ use axum::{
 };
 use mergetip_api::{ApiConfig, AppState, Services, router};
 use mergetip_core::SystemClock;
-use mergetip_engine::{Engine, EngineSettings};
+use mergetip_engine::{Engine, EngineSettings, Payments};
 use mergetip_github::{OctocrabGitHub, oauth::OAuthClient};
 use mergetip_payer::{LnurlClient, Network, nwc::NwcConnector};
 use mergetip_worker::{
     Runner, RunnerConfig,
-    handlers::{PayTipStubHandler, PostReplyHandler, ProcessEventHandler, VerifyTipHandler},
+    handlers::{PayTipHandler, PostReplyHandler, ProcessEventHandler, VerifyTipHandler},
 };
 use serde_json::{Value, json};
 use sqlx::PgPool;
@@ -82,9 +82,15 @@ impl System {
             pool.clone(),
             Arc::new(client),
             Arc::new(SystemClock),
-            EngineSettings {
-                web_base_url: "https://mergetip.dev".into(),
-                stub_payer: true,
+            EngineSettings::new("https://mergetip.dev", true),
+            Payments {
+                receivers: Arc::new(
+                    LnurlClient::new(Network::Regtest, true, Arc::new(SystemClock)).unwrap(),
+                ),
+                wallets: Arc::new(NwcConnector),
+                keyring: Arc::new(
+                    mergetip_crypto::Keyring::from_hex(&"07".repeat(32), None).unwrap(),
+                ),
             },
         ));
         let runner = Runner::new(
@@ -102,7 +108,7 @@ impl System {
         .register(ProcessEventHandler(engine.clone()))
         .register(VerifyTipHandler(engine.clone()))
         .register(PostReplyHandler(engine.clone()))
-        .register(PayTipStubHandler(engine));
+        .register(PayTipHandler(engine));
         let shutdown = CancellationToken::new();
         let worker = tokio::spawn(runner.run(shutdown.clone()));
 

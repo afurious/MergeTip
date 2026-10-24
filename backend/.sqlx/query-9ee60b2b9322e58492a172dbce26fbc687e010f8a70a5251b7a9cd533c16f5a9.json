@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO payment_attempts (tip_id, payment_hash, bolt11, amount_msat, invoice_expires_at, status)\n         VALUES ($1, 'h', 'lnbcrt...', 21000, now() + interval '10 minutes', 'pending')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9ee60b2b9322e58492a172dbce26fbc687e010f8a70a5251b7a9cd533c16f5a9"
+}
