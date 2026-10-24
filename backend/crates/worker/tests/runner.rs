@@ -78,8 +78,16 @@ async fn job_rows(pool: &PgPool) -> (i64, i64) {
 }
 
 fn start(pool: &PgPool, handler: Recorder) -> (CancellationToken, tokio::task::JoinHandle<()>) {
+    start_with(pool, handler, fast_config())
+}
+
+fn start_with(
+    pool: &PgPool,
+    handler: Recorder,
+    config: RunnerConfig,
+) -> (CancellationToken, tokio::task::JoinHandle<()>) {
     let shutdown = CancellationToken::new();
-    let runner = Runner::new(pool.clone(), Arc::new(SystemClock), fast_config()).register(handler);
+    let runner = Runner::new(pool.clone(), Arc::new(SystemClock), config).register(handler);
     let handle = tokio::spawn(runner.run(shutdown.clone()));
     (shutdown, handle)
 }
@@ -109,6 +117,31 @@ async fn runs_enqueued_jobs_and_deletes_them(pool: PgPool) -> sqlx::Result<()> {
     shutdown.cancel();
     handle.await.unwrap();
     assert_eq!(job_rows(&pool).await, (0, 0));
+    Ok(())
+}
+
+/// With polling effectively off, only the NOTIFY sent on enqueue can wake a slot.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn enqueue_notification_wakes_an_idle_slot(pool: PgPool) -> sqlx::Result<()> {
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let config = RunnerConfig {
+        poll_interval: Duration::from_secs(30),
+        ..fast_config()
+    };
+    let (shutdown, handle) = start_with(&pool, Recorder::new(tx), config);
+    // Let every slot finish its first empty claim and go idle.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    for n in 0..3 {
+        enqueue(&pool, NewJob::new("record", json!({ "n": n }))).await;
+        let seen = tokio::time::timeout(Duration::from_secs(3), rx.recv())
+            .await
+            .expect("woken by NOTIFY, not by the 30 s poll");
+        assert_eq!(seen, Some(json!({ "n": n })));
+    }
+
+    shutdown.cancel();
+    handle.await.unwrap();
     Ok(())
 }
 

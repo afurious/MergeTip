@@ -311,8 +311,10 @@ impl Runner {
     }
 }
 
-/// Wakes idle slots whenever a job is enqueued. `PgListener` reconnects on its own; errors are
-/// logged and polling covers the gap.
+/// Wakes one idle slot per enqueued job. Waking every slot would turn each enqueue into
+/// `concurrency` claim queries, all but one coming back empty. If no slot is idle, `notify_one`
+/// stores a permit, so the next slot to finish claims straight away. `PgListener` reconnects on
+/// its own; errors are logged and polling covers the gap.
 async fn listen(pool: PgPool, wake: Arc<Notify>, shutdown: CancellationToken) {
     let mut listener = loop {
         match PgListener::connect_with(&pool).await {
@@ -331,7 +333,7 @@ async fn listen(pool: PgPool, wake: Arc<Notify>, shutdown: CancellationToken) {
         tokio::select! {
             () = shutdown.cancelled() => return,
             message = listener.recv() => match message {
-                Ok(_) => wake.notify_waiters(),
+                Ok(_) => wake.notify_one(),
                 Err(err) => {
                     tracing::warn!(error = %err, "job notification stream failed");
                     tokio::time::sleep(Duration::from_secs(1)).await;
