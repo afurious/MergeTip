@@ -100,7 +100,10 @@ async fn reused_login_resolves_to_its_current_holder(pool: PgPool) -> sqlx::Resu
         .await
         .unwrap();
     assert_eq!(
-        users::get_by_login(&pool, "alice-renamed").await.unwrap().id,
+        users::get_by_login(&pool, "alice-renamed")
+            .await
+            .unwrap()
+            .id,
         a.id
     );
     assert_eq!(users::get_by_login(&pool, "alice").await.unwrap().id, b.id);
@@ -113,12 +116,13 @@ async fn two_current_rows_cannot_share_a_login(pool: PgPool) -> sqlx::Result<()>
     users::upsert_by_github_id(&mut conn, &profile(1, "alice"))
         .await
         .unwrap();
-    let duplicate = sqlx::query!(
-        "INSERT INTO users (github_id, github_login) VALUES (2, 'ALICE')"
-    )
-    .execute(&pool)
-    .await;
-    assert!(duplicate.is_err(), "the unique index must reject a second current holder");
+    let duplicate = sqlx::query!("INSERT INTO users (github_id, github_login) VALUES (2, 'ALICE')")
+        .execute(&pool)
+        .await;
+    assert!(
+        duplicate.is_err(),
+        "the unique index must reject a second current holder"
+    );
     Ok(())
 }
 
