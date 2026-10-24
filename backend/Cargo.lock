@@ -2186,6 +2186,7 @@ dependencies = [
  "async-trait",
  "dotenvy",
  "getrandom 0.4.3",
+ "hex",
  "mergetip-core",
  "mergetip-crypto",
  "mergetip-fiat",

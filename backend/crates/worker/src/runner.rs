@@ -9,6 +9,7 @@ use std::{collections::HashMap, fmt, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use mergetip_core::Clock;
+use mergetip_crypto::{RandomError, random_bytes};
 use mergetip_store::{
     PgPool, StoreError,
     jobs::{self, Job},
@@ -121,14 +122,20 @@ pub struct Runner {
 }
 
 impl Runner {
-    pub fn new(pool: PgPool, clock: Arc<dyn Clock>, config: RunnerConfig) -> Self {
-        let suffix = getrandom::u32().unwrap_or_default();
-        Self {
+    /// Fails if the OS random number generator does. Lease tokens are the only thing that
+    /// stops one worker from finishing another's job, so they are never built from a fallback.
+    pub fn new(
+        pool: PgPool,
+        clock: Arc<dyn Clock>,
+        config: RunnerConfig,
+    ) -> Result<Self, RandomError> {
+        let suffix = hex::encode(random_bytes::<4>()?);
+        Ok(Self {
             ctx: JobContext { pool, clock },
             config,
             handlers: HashMap::new(),
-            worker_id: format!("worker-{}-{suffix:08x}", std::process::id()),
-        }
+            worker_id: format!("worker-{}-{suffix}", std::process::id()),
+        })
     }
 
     /// Adds a handler. Registering two handlers for one kind is a wiring bug, so it panics.
@@ -201,7 +208,17 @@ impl Runner {
             tokio::pin!(notified);
             notified.as_mut().enable();
 
-            let lease_token = format!("{}/{}", self.worker_id, lease_nonce());
+            let lease_token = match random_bytes::<12>() {
+                Ok(nonce) => format!("{}/{}", self.worker_id, hex::encode(nonce)),
+                Err(err) => {
+                    tracing::error!(error = %err, "cannot create a lease token; not claiming");
+                    tokio::select! {
+                        () = tokio::time::sleep(self.config.poll_interval) => {}
+                        () = shutdown.cancelled() => {}
+                    }
+                    continue;
+                }
+            };
             match jobs::claim(&self.ctx.pool, &kinds, &lease_token, self.config.lease).await {
                 Ok(Some(job)) => self.execute(job).await,
                 Ok(None) => {
@@ -291,6 +308,7 @@ impl Runner {
     }
 
     fn backoff(&self, attempt: i32) -> Duration {
+        // Jitter only spreads retries out; the midpoint is a safe value if the RNG fails.
         let jitter = f64::from(getrandom::u32().unwrap_or(u32::MAX / 2)) / f64::from(u32::MAX);
         jobs::backoff(
             attempt,
@@ -341,11 +359,4 @@ async fn listen(pool: PgPool, wake: Arc<Notify>, shutdown: CancellationToken) {
             },
         }
     }
-}
-
-/// A per-claim nonce for the lease token; uniqueness, not secrecy, is what matters here.
-fn lease_nonce() -> String {
-    let high = getrandom::u64().unwrap_or_default();
-    let low = getrandom::u32().unwrap_or_default();
-    format!("{high:016x}{low:08x}")
 }

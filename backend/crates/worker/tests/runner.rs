@@ -87,7 +87,9 @@ fn start_with(
     config: RunnerConfig,
 ) -> (CancellationToken, tokio::task::JoinHandle<()>) {
     let shutdown = CancellationToken::new();
-    let runner = Runner::new(pool.clone(), Arc::new(SystemClock), config).register(handler);
+    let runner = Runner::new(pool.clone(), Arc::new(SystemClock), config)
+        .unwrap()
+        .register(handler);
     let handle = tokio::spawn(runner.run(shutdown.clone()));
     (shutdown, handle)
 }

@@ -20,6 +20,7 @@ async fn main() -> anyhow::Result<()> {
 
     let shutdown = shutdown::on_signal();
     Runner::new(pool, Arc::new(SystemClock), config.runner)
+        .context("cannot initialise the job runner")?
         .register(NoopHandler)
         .run(shutdown)
         .await;
