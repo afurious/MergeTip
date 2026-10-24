@@ -23,7 +23,10 @@ async fn core_tables_exist(pool: PgPool) -> sqlx::Result<()> {
         "users",
         "wallet_connections",
     ] {
-        assert!(tables.iter().any(|t| t == expected), "missing table {expected}");
+        assert!(
+            tables.iter().any(|t| t == expected),
+            "missing table {expected}"
+        );
     }
     Ok(())
 }

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO tip_events (tip_id, from_state, to_state) VALUES ($1, NULL, $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7474cd9886f5eeca72698d18fed587edf88d0edd541c887c5f72c35031df8d2f"
+}

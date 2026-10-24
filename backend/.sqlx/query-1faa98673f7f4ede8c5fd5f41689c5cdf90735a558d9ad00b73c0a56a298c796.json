@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE github_events SET processed_at = $2 WHERE delivery_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1faa98673f7f4ede8c5fd5f41689c5cdf90735a558d9ad00b73c0a56a298c796"
+}

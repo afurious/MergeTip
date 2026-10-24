@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE installations SET suspended_at = $2 WHERE github_installation_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d89084d4a21f5715e297019a0d21dbe116bbad5f1a341c901517dc543c6a2e35"
+}

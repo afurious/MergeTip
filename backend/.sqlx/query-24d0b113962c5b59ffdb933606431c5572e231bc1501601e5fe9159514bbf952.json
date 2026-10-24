@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM installation_repos\n        WHERE installation_id = (SELECT id FROM installations WHERE github_installation_id = $1)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "24d0b113962c5b59ffdb933606431c5572e231bc1501601e5fe9159514bbf952"
+}
