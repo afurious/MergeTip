@@ -332,25 +332,117 @@ mod tests {
     /// Guards the single-writer rule: only this module may assign `tips.state`.
     #[test]
     fn only_this_module_writes_tip_state() {
-        let needle = ["set", "state"].join(" ");
         let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
         let this_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tips.rs");
         let mut offenders = Vec::new();
         visit(&crates, &mut |path| {
             if path.extension().is_some_and(|ext| ext == "rs")
                 && fs::canonicalize(path).ok() != fs::canonicalize(&this_file).ok()
+                && writes_tip_state(&fs::read_to_string(path).unwrap_or_default())
             {
-                let text = fs::read_to_string(path).unwrap_or_default().to_lowercase();
-                let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
-                if collapsed.contains(&needle) {
-                    offenders.push(path.display().to_string());
-                }
+                offenders.push(path.display().to_string());
             }
         });
         assert!(
             offenders.is_empty(),
             "tips.state written outside store::tips: {offenders:?}"
         );
+    }
+
+    #[test]
+    fn detector_flags_every_way_of_writing_state() {
+        for sql in [
+            "UPDATE tips SET state = 'paid' WHERE id = $1",
+            "UPDATE tips SET version = version + 1, state = 'paid' WHERE id = $1",
+            "update tips\n   set error_code = $2,state=$3\n where id = $1",
+            "UPDATE tips AS t SET \"state\" = $1 RETURNING *",
+            "UPDATE tips SET state = $1",
+            "INSERT INTO tips (id, state, amount_sats) VALUES ($1, $2, $3)",
+        ] {
+            assert!(writes_tip_state(sql), "missed: {sql}");
+        }
+    }
+
+    #[test]
+    fn detector_ignores_reads_and_other_tables() {
+        for sql in [
+            "UPDATE tips SET email_status = $2 WHERE state = 'paid'",
+            "UPDATE tips SET error_code = $1 WHERE id = $2 AND state = $3 RETURNING state",
+            "UPDATE tip_events SET detail = $1 WHERE to_state = 'paid'",
+            "UPDATE tips_archive SET state = 'x'",
+            "SELECT state FROM tips WHERE state = $1",
+            "INSERT INTO tip_events (tip_id, from_state, to_state) VALUES ($1, $2, $3)",
+            "INSERT INTO tips (id, prestate_note) VALUES ($1, $2)",
+            "// reset state after the test",
+        ] {
+            assert!(!writes_tip_state(sql), "false positive: {sql}");
+        }
+    }
+
+    /// Whether `source` contains SQL that assigns `tips.state`: `state` among the assignments of
+    /// an `UPDATE tips … SET` (before `WHERE`/`RETURNING`), or in the column list of an
+    /// `INSERT INTO tips (…)`. Column order and spacing don't matter; mentions elsewhere do not
+    /// count.
+    fn writes_tip_state(source: &str) -> bool {
+        let text = source.to_lowercase().replace('"', "");
+        statements(&text, "update tips").any(|rest| {
+            let Some(set_at) = find_word(rest, "set") else {
+                return false;
+            };
+            let assignments = &rest[set_at + 3..];
+            let end = ["where", "returning", ";"]
+                .iter()
+                .filter_map(|stop| find_word(assignments, stop))
+                .min()
+                .unwrap_or(assignments.len());
+            assigns_state(&assignments[..end])
+        }) || statements(&text, "insert into tips").any(|rest| {
+            let rest = rest.trim_start();
+            rest.strip_prefix('(')
+                .and_then(|cols| cols.split_once(')'))
+                .is_some_and(|(cols, _)| cols.split(',').any(|col| col.trim() == "state"))
+        })
+    }
+
+    /// The text after each occurrence of `prefix` that ends at a word boundary (so
+    /// `update tips` does not match `update tips_archive`).
+    fn statements<'a>(text: &'a str, prefix: &'a str) -> impl Iterator<Item = &'a str> {
+        let collapsed_prefix: Vec<&str> = prefix.split(' ').collect();
+        text.match_indices(collapsed_prefix[0])
+            .filter_map(move |(at, _)| {
+                let mut rest = &text[at..];
+                for word in &collapsed_prefix {
+                    rest = rest.trim_start().strip_prefix(word)?;
+                    if rest.starts_with(is_ident_char) {
+                        return None;
+                    }
+                }
+                Some(rest)
+            })
+    }
+
+    fn assigns_state(assignments: &str) -> bool {
+        let mut search = assignments;
+        while let Some(at) = find_word(search, "state") {
+            if search[at + 5..].trim_start().starts_with('=') {
+                return true;
+            }
+            search = &search[at + 5..];
+        }
+        false
+    }
+
+    /// Byte offset of `word` in `text` where it is not part of a longer identifier.
+    fn find_word(text: &str, word: &str) -> Option<usize> {
+        text.match_indices(word).map(|(at, _)| at).find(|&at| {
+            let before = text[..at].chars().next_back();
+            let after = text[at + word.len()..].chars().next();
+            !before.is_some_and(is_ident_char) && !after.is_some_and(is_ident_char)
+        })
+    }
+
+    fn is_ident_char(c: char) -> bool {
+        c.is_alphanumeric() || c == '_'
     }
 
     fn visit(dir: &Path, f: &mut dyn FnMut(&Path)) {
