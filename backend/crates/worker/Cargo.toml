@@ -19,6 +19,7 @@ mergetip-fiat.workspace = true
 mergetip-notify.workspace = true
 mergetip-store.workspace = true
 mergetip-crypto.workspace = true
+mergetip-engine.workspace = true
 mergetip-runtime.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true

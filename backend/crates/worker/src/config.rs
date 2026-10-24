@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use mergetip_crypto::{Keyring, Redacted};
 use mergetip_runtime::{AppEnv, ConfigError, config::Env};
@@ -12,6 +12,19 @@ pub struct WorkerConfig {
     /// Built at startup so a bad `MASTER_KEY` stops the process before any job runs.
     pub keyring: Arc<Keyring>,
     pub runner: RunnerConfig,
+    pub github: GithubAppConfig,
+    /// The web app's base URL, for links in bot replies.
+    pub web_base_url: String,
+    /// Pay tips with a fake proof (staging demos only). Refused in production.
+    pub stub_payer: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct GithubAppConfig {
+    pub app_id: u64,
+    pub private_key_path: PathBuf,
+    /// Overrides `https://api.github.com` (GitHub Enterprise or a local mock).
+    pub api_url: Option<String>,
 }
 
 impl WorkerConfig {
@@ -36,6 +49,14 @@ impl WorkerConfig {
             });
         }
 
+        let stub_payer = env.parse_or("STUB_PAYER", false)?;
+        if stub_payer && app_env == AppEnv::Production {
+            return Err(ConfigError::Invalid {
+                name: "STUB_PAYER",
+                reason: "the stub payer fakes payments and cannot run in production".into(),
+            });
+        }
+
         Ok(Self {
             app_env,
             database_url: Redacted::new(env.required("DATABASE_URL")?),
@@ -44,6 +65,21 @@ impl WorkerConfig {
                 concurrency,
                 ..RunnerConfig::default()
             },
+            github: GithubAppConfig {
+                app_id: env.required("GITHUB_APP_ID")?.trim().parse().map_err(
+                    |err: std::num::ParseIntError| ConfigError::Invalid {
+                        name: "GITHUB_APP_ID",
+                        reason: err.to_string(),
+                    },
+                )?,
+                private_key_path: env.required("GITHUB_APP_PRIVATE_KEY_PATH")?.into(),
+                api_url: env.optional("GITHUB_API_URL"),
+            },
+            web_base_url: env
+                .required("PUBLIC_BASE_URL")?
+                .trim_end_matches('/')
+                .to_owned(),
+            stub_payer,
         })
     }
 
@@ -64,24 +100,64 @@ mod tests {
 
     const KEY: &str = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
 
+    fn base() -> HashMap<&'static str, &'static str> {
+        HashMap::from([
+            ("MASTER_KEY", KEY),
+            ("DATABASE_URL", "postgres://x"),
+            ("GITHUB_APP_ID", "12345"),
+            ("GITHUB_APP_PRIVATE_KEY_PATH", "./.secrets/github-app.pem"),
+            ("PUBLIC_BASE_URL", "http://localhost:5173/"),
+        ])
+    }
+
     #[test]
     fn loads_with_defaults() {
-        let env = HashMap::from([("MASTER_KEY", KEY), ("DATABASE_URL", "postgres://x")]);
+        let env = base();
         let config = WorkerConfig::from_env(&env).unwrap();
         assert_eq!(config.app_env, AppEnv::Dev);
         assert_eq!(config.runner.concurrency, 8);
         assert_eq!(config.pool_size(), 10);
+        assert_eq!(config.github.app_id, 12345);
+        assert_eq!(config.web_base_url, "http://localhost:5173");
+        assert!(!config.stub_payer);
         assert!(!format!("{config:?}").contains("postgres://x"));
     }
 
     #[test]
+    fn stub_payer_is_refused_in_production() {
+        let mut env = base();
+        env.insert("STUB_PAYER", "true");
+        env.insert("APP_ENV", "staging");
+        assert!(WorkerConfig::from_env(&env).unwrap().stub_payer);
+        env.insert("APP_ENV", "production");
+        assert!(matches!(
+            WorkerConfig::from_env(&env),
+            Err(ConfigError::Invalid {
+                name: "STUB_PAYER",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn github_app_id_is_required() {
+        let mut env = base();
+        env.remove("GITHUB_APP_ID");
+        assert_eq!(
+            WorkerConfig::from_env(&env).map(|_| ()),
+            Err(ConfigError::Missing("GITHUB_APP_ID"))
+        );
+    }
+
+    #[test]
     fn rejects_missing_or_bad_master_key() {
-        let env = HashMap::from([("DATABASE_URL", "postgres://x")]);
+        let mut env = base();
+        env.remove("MASTER_KEY");
         assert_eq!(
             WorkerConfig::from_env(&env).map(|_| ()),
             Err(ConfigError::Missing("MASTER_KEY"))
         );
-        let env = HashMap::from([("DATABASE_URL", "postgres://x"), ("MASTER_KEY", "abc")]);
+        env.insert("MASTER_KEY", "abc");
         assert!(matches!(
             WorkerConfig::from_env(&env),
             Err(ConfigError::Invalid {
@@ -93,11 +169,8 @@ mod tests {
 
     #[test]
     fn rejects_zero_concurrency() {
-        let env = HashMap::from([
-            ("MASTER_KEY", KEY),
-            ("DATABASE_URL", "postgres://x"),
-            ("WORKER_CONCURRENCY", "0"),
-        ]);
+        let mut env = base();
+        env.insert("WORKER_CONCURRENCY", "0");
         assert!(matches!(
             WorkerConfig::from_env(&env),
             Err(ConfigError::Invalid {

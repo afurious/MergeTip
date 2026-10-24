@@ -2218,6 +2218,7 @@ dependencies = [
  "hex",
  "mergetip-core",
  "mergetip-crypto",
+ "mergetip-engine",
  "mergetip-fiat",
  "mergetip-github",
  "mergetip-notify",
