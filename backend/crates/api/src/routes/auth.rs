@@ -15,7 +15,7 @@ use mergetip_store::{
 use serde::{Deserialize, Serialize};
 use time::Duration;
 
-use crate::{ApiError, AppState, cookies};
+use crate::{ApiError, AppState, cookies, extract::SessionUser};
 
 /// Web sessions last 30 days and slide forward with use.
 pub const WEB_SESSION_TTL: Duration = Duration::days(30);
@@ -301,4 +301,72 @@ mod tests {
         assert_eq!(urlencode("access_denied"), "access_denied");
         assert_eq!(urlencode("a b&c"), "a%20b%26c");
     }
+}
+
+/// Extension tokens last a week; the extension asks the web app for a new one after that.
+pub const EXTENSION_TOKEN_TTL: Duration = Duration::days(7);
+
+/// Sign out of this browser.
+#[utoipa::path(
+    post,
+    path = "/v1/auth/logout",
+    operation_id = "logout",
+    tag = "auth",
+    responses((status = 204, description = "Signed out")),
+    security(("session" = []))
+)]
+pub async fn logout(
+    State(state): State<AppState>,
+    SessionUser(auth): SessionUser,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    if let Some(token) = cookies::get(&headers, cookies::SESSION) {
+        sessions::delete_by_hash(state.pool(), &mergetip_crypto::hash_token(token)).await?;
+    }
+    tracing::info!(user_id = %auth.user.id, "signed out");
+    let mut response = StatusCode::NO_CONTENT.into_response();
+    response.headers_mut().append(
+        header::SET_COOKIE,
+        cookies::clear(cookies::SESSION, "/", state.config().secure_cookies()),
+    );
+    Ok(response)
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ExtensionToken {
+    /// Send as `Authorization: Bearer <token>`.
+    pub token: String,
+    #[serde(with = "time::serde::rfc3339")]
+    #[schema(value_type = String, format = DateTime)]
+    pub expires_at: time::OffsetDateTime,
+}
+
+/// Mint a bearer token for the browser extension.
+#[utoipa::path(
+    post,
+    path = "/v1/auth/extension-token",
+    operation_id = "create_extension_token",
+    tag = "auth",
+    responses((status = 200, body = ExtensionToken)),
+    security(("session" = []))
+)]
+pub async fn extension_token(
+    State(state): State<AppState>,
+    SessionUser(auth): SessionUser,
+) -> Result<axum::Json<ExtensionToken>, ApiError> {
+    let token = random_token().map_err(ApiError::internal)?;
+    let expires_at = state.clock().now() + EXTENSION_TOKEN_TTL;
+    sessions::create(
+        state.pool(),
+        auth.user.id,
+        SessionKind::Extension,
+        &token.hash,
+        expires_at,
+        None,
+    )
+    .await?;
+    Ok(axum::Json(ExtensionToken {
+        token: token.raw.expose().clone(),
+        expires_at,
+    }))
 }

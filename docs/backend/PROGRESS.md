@@ -36,7 +36,7 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 - [x] Payments RFC
 - [x] 3.1 Sessions and payment attempts schema
 - [x] 3.2 GitHub OAuth sign-in
-- [ ] 3.3 Auth extractors, sessions and `GET /me`
+- [x] 3.3 Auth extractors, sessions and `GET /me`
 - [ ] 3.4 LNURL resolver and invoice validation
 - [ ] 3.5 NWC client
 - [ ] 3.6 Wallet, address and settings endpoints

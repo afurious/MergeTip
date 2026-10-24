@@ -2,6 +2,7 @@
 
 pub(crate) mod auth;
 pub(crate) mod health;
+pub(crate) mod me;
 pub(crate) mod webhooks;
 
 use std::time::Duration;
@@ -48,6 +49,9 @@ pub fn router(state: AppState) -> Router {
         .route("/health", get(health::health))
         .route("/auth/github/login", get(auth::login))
         .route("/auth/github/callback", get(auth::callback))
+        .route("/auth/logout", post(auth::logout))
+        .route("/auth/extension-token", post(auth::extension_token))
+        .route("/me", get(me::get_me))
         .route("/webhooks/github", post(webhooks::github));
 
     // Layers run outermost-last. CORS wraps every layer that can answer on its own (body limit,

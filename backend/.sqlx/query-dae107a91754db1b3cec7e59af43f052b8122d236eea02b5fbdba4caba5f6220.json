@@ -1,0 +1,100 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, user_id, wallet_pubkey, relays, methods, encryption, created_at\n        FROM wallet_connections WHERE user_id = $1 AND revoked_at IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "wallet_connections",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "wallet_connections",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "wallet_pubkey",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "wallet_connections",
+            "name": "wallet_pubkey"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "relays",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "wallet_connections",
+            "name": "relays"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "methods",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "wallet_connections",
+            "name": "methods"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "encryption",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "wallet_connections",
+            "name": "encryption"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "wallet_connections",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "dae107a91754db1b3cec7e59af43f052b8122d236eea02b5fbdba4caba5f6220"
+}

@@ -25,6 +25,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/extension-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mint a bearer token for the browser extension. */
+        post: operations["create_extension_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/github/callback": {
         parameters: {
             query?: never;
@@ -59,6 +76,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign out of this browser. */
+        post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/health": {
         parameters: {
             query?: never;
@@ -68,6 +102,23 @@ export interface paths {
         };
         /** Service status and build version. */
         get: operations["health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in user. */
+        get: operations["get_me"];
         put?: never;
         post?: never;
         delete?: never;
@@ -97,6 +148,17 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Caps: {
+            /** Format: int64 */
+            daily_max_sats: number;
+            /** Format: int64 */
+            per_tip_max_sats: number;
+            /**
+             * Format: int64
+             * @description Sats paid or in flight since midnight UTC.
+             */
+            spent_today_sats: number;
+        };
         ErrorBody: {
             error: components["schemas"]["ErrorDetail"];
         };
@@ -105,11 +167,36 @@ export interface components {
             code: string;
             message: string;
         };
+        ExtensionToken: {
+            /** Format: date-time */
+            expires_at: string;
+            /** @description Send as `Authorization: Bearer <token>`. */
+            token: string;
+        };
         Health: {
             /** @description Always `ok` when the process can serve requests. */
             status: string;
             /** @description The running build's version. */
             version: string;
+        };
+        Me: {
+            avatar_url: string;
+            caps: components["schemas"]["Caps"];
+            confirm_otp_enabled: boolean;
+            /** Format: int64 */
+            confirm_threshold_sats: number;
+            email?: string | null;
+            email_opt_out: boolean;
+            github_login: string;
+            id: string;
+            lightning_address?: string | null;
+            wallet: components["schemas"]["WalletStatus"];
+        };
+        WalletStatus: {
+            connected: boolean;
+            /** @description NIP-47 methods the wallet granted, e.g. `pay_invoice`. */
+            methods: string[];
+            relay?: string | null;
         };
     };
     responses: never;
@@ -136,6 +223,25 @@ export interface operations {
                 };
                 content: {
                     "text/plain": string;
+                };
+            };
+        };
+    };
+    create_extension_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtensionToken"];
                 };
             };
         };
@@ -193,6 +299,24 @@ export interface operations {
             };
         };
     };
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed out */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     health: {
         parameters: {
             query?: never;
@@ -209,6 +333,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+        };
+    };
+    get_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
         };

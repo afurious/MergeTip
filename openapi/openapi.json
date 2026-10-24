@@ -32,6 +32,31 @@
         }
       }
     },
+    "/v1/auth/extension-token": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Mint a bearer token for the browser extension.",
+        "operationId": "create_extension_token",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtensionToken"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/v1/auth/github/callback": {
       "get": {
         "tags": [
@@ -120,6 +145,25 @@
         }
       }
     },
+    "/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sign out of this browser.",
+        "operationId": "logout",
+        "responses": {
+          "204": {
+            "description": "Signed out"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/v1/health": {
       "get": {
         "tags": [
@@ -139,6 +183,44 @@
             }
           }
         }
+      }
+    },
+    "/v1/me": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "The signed-in user.",
+        "operationId": "get_me",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/v1/webhooks/github": {
@@ -218,6 +300,32 @@
   },
   "components": {
     "schemas": {
+      "Caps": {
+        "type": "object",
+        "required": [
+          "per_tip_max_sats",
+          "daily_max_sats",
+          "spent_today_sats"
+        ],
+        "properties": {
+          "daily_max_sats": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "per_tip_max_sats": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "spent_today_sats": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Sats paid or in flight since midnight UTC.",
+            "minimum": 0
+          }
+        }
+      },
       "ErrorBody": {
         "type": "object",
         "required": [
@@ -245,6 +353,23 @@
           }
         }
       },
+      "ExtensionToken": {
+        "type": "object",
+        "required": [
+          "token",
+          "expires_at"
+        ],
+        "properties": {
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "token": {
+            "type": "string",
+            "description": "Send as `Authorization: Bearer <token>`."
+          }
+        }
+      },
       "Health": {
         "type": "object",
         "required": [
@@ -261,6 +386,95 @@
             "description": "The running build's version."
           }
         }
+      },
+      "Me": {
+        "type": "object",
+        "required": [
+          "id",
+          "github_login",
+          "avatar_url",
+          "wallet",
+          "caps",
+          "confirm_threshold_sats",
+          "confirm_otp_enabled",
+          "email_opt_out"
+        ],
+        "properties": {
+          "avatar_url": {
+            "type": "string"
+          },
+          "caps": {
+            "$ref": "#/components/schemas/Caps"
+          },
+          "confirm_otp_enabled": {
+            "type": "boolean"
+          },
+          "confirm_threshold_sats": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email_opt_out": {
+            "type": "boolean"
+          },
+          "github_login": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lightning_address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "wallet": {
+            "$ref": "#/components/schemas/WalletStatus"
+          }
+        }
+      },
+      "WalletStatus": {
+        "type": "object",
+        "required": [
+          "connected",
+          "methods"
+        ],
+        "properties": {
+          "connected": {
+            "type": "boolean"
+          },
+          "methods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "NIP-47 methods the wallet granted, e.g. `pay_invoice`."
+          },
+          "relay": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer"
+      },
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "mt_session"
       }
     }
   },
@@ -276,6 +490,10 @@
     {
       "name": "auth",
       "description": "Signing in and sessions"
+    },
+    {
+      "name": "me",
+      "description": "The signed-in user's account and settings"
     }
   ]
 }
