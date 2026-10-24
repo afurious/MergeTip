@@ -112,3 +112,315 @@ mod tests {
         );
     }
 }
+
+pub use mock_wallet::{MockWallet, behaviour};
+
+mod mock_wallet {
+    //! A NIP-47 wallet on a relay, for tests and local development. It pays invoices minted
+    //! with its `seed` by deriving their preimage; certain amounts trigger failure modes (see
+    //! [`behaviour`]).
+
+    use std::{
+        collections::HashMap,
+        sync::{Arc, Mutex},
+    };
+
+    use bitcoin::hashes::{Hash, sha256};
+    use lightning_invoice::Bolt11Invoice;
+    use nostr::nips::nip47::{
+        ErrorCode, GetInfoResponse, LookupInvoiceResponse, Method, NIP47Error, Nip47Ciphers,
+        Nip47Tag, NostrWalletConnectUri, PayInvoiceResponse, Request, RequestParams, Response,
+        ResponseResult, TransactionState, TransactionType,
+    };
+    use nostr_sdk::prelude::{
+        Client, ClientNotification, Event, EventBuilder, Filter, FinalizeEvent, Keys, Kind,
+        RelayUrl, StreamExt, Tag, Timestamp,
+    };
+    use tokio::task::JoinHandle;
+
+    use super::preimage_from_invoice;
+    use crate::nwc::PayError;
+
+    /// Amounts (in sats) that make the mock misbehave, so every failure path can be exercised.
+    pub mod behaviour {
+        /// Answers `INSUFFICIENT_BALANCE`.
+        pub const INSUFFICIENT_BALANCE_SATS: u64 = 666;
+        /// Pays, but the answer is "lost": the client times out, and `lookup_invoice` later
+        /// reports the payment as settled. Models a crash or relay drop after paying.
+        pub const PAYS_SILENTLY_SATS: u64 = 777;
+        /// Answers `QUOTA_EXCEEDED`.
+        pub const QUOTA_EXCEEDED_SATS: u64 = 888;
+        /// Never pays and never answers: `lookup_invoice` says not found.
+        pub const NEVER_ANSWERS_SATS: u64 = 999;
+    }
+
+    const METHODS: [&str; 3] = ["pay_invoice", "get_info", "lookup_invoice"];
+
+    pub struct MockWallet {
+        uri: String,
+        paid: Arc<Mutex<HashMap<String, String>>>,
+        client: Client,
+        task: JoinHandle<()>,
+    }
+
+    impl std::fmt::Debug for MockWallet {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("MockWallet").finish_non_exhaustive()
+        }
+    }
+
+    impl MockWallet {
+        /// Publishes the wallet's info event on `relay_url` and starts answering requests.
+        pub async fn start(relay_url: &str, seed: [u8; 32]) -> Result<Self, PayError> {
+            let relay =
+                RelayUrl::parse(relay_url).map_err(|err| PayError::Relay(err.to_string()))?;
+            let wallet = Keys::generate();
+            let app = Keys::generate();
+            let client = Client::default();
+            client
+                .add_relay(&relay)
+                .await
+                .map_err(|err| PayError::Relay(err.to_string()))?;
+            client
+                .try_connect()
+                .timeout(std::time::Duration::from_secs(10))
+                .await;
+
+            let encryption = Tag::parse(["encryption", "nip44_v2 nip04"])
+                .map_err(|err| PayError::Protocol(err.to_string()))?;
+            let info = EventBuilder::new(Kind::WalletConnectInfo, METHODS.join(" "))
+                .tag(encryption)
+                .finalize(&wallet)
+                .map_err(|err| PayError::Protocol(err.to_string()))?;
+            client
+                .send_event(&info)
+                .await
+                .map_err(|err| PayError::Relay(err.to_string()))?;
+
+            let filter = Filter::new()
+                .kind(Kind::WalletConnectRequest)
+                .pubkey(wallet.public_key())
+                .since(Timestamp::now());
+            client
+                .subscribe(filter)
+                .await
+                .map_err(|err| PayError::Relay(err.to_string()))?;
+
+            let paid = Arc::new(Mutex::new(HashMap::new()));
+            let mut notifications = client.notifications();
+            let task_client = client.clone();
+            let task_paid = paid.clone();
+            let task_wallet = wallet.clone();
+            let task = tokio::spawn(async move {
+                while let Some(notification) = notifications.next().await {
+                    if let ClientNotification::Event { event, .. } = notification
+                        && event.kind == Kind::WalletConnectRequest
+                    {
+                        answer(&task_client, &task_wallet, &event, &seed, &task_paid).await;
+                    }
+                }
+            });
+
+            let uri = NostrWalletConnectUri::new(
+                wallet.public_key(),
+                vec![relay],
+                app.secret_key().clone(),
+                None,
+            );
+            Ok(Self {
+                uri: uri.to_string(),
+                paid,
+                client,
+                task,
+            })
+        }
+
+        /// The `nostr+walletconnect://` URI a sender would paste.
+        pub fn uri(&self) -> &str {
+            &self.uri
+        }
+
+        /// Payment hashes paid so far.
+        pub fn paid_hashes(&self) -> Vec<String> {
+            self.paid
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .keys()
+                .cloned()
+                .collect()
+        }
+
+        pub async fn stop(self) {
+            self.task.abort();
+            self.client.shutdown().await;
+        }
+    }
+
+    async fn answer(
+        client: &Client,
+        wallet: &Keys,
+        event: &Event,
+        seed: &[u8; 32],
+        paid: &Mutex<HashMap<String, String>>,
+    ) {
+        let cipher = if event.tags.iter().any(|t| {
+            matches!(Nip47Tag::try_from(t), Ok(Nip47Tag::Encryption(c)) if c.has(Nip47Ciphers::NIP44V2))
+        }) {
+            Nip47Ciphers::NIP44V2
+        } else {
+            Nip47Ciphers::NIP04
+        };
+        let Ok(plain) = cipher.decrypt(wallet.secret_key(), &event.pubkey, &event.content) else {
+            return;
+        };
+        let Ok(request) = Request::from_json(&plain) else {
+            return;
+        };
+        let Some(response) = respond(request, seed, paid) else {
+            return;
+        };
+        let Ok(json) = serde_json::to_string(&response) else {
+            return;
+        };
+        let Ok(encrypted) = cipher.encrypt(wallet.secret_key(), &event.pubkey, &json) else {
+            return;
+        };
+        let reply = EventBuilder::new(Kind::WalletConnectResponse, encrypted)
+            .tag(Tag::public_key(event.pubkey))
+            .tag(Tag::event(event.id))
+            .finalize(wallet);
+        if let Ok(reply) = reply {
+            let _ = client.send_event(&reply).await;
+        }
+    }
+
+    fn error(method: Method, code: ErrorCode, message: &str) -> Response {
+        Response {
+            result_type: method,
+            error: Some(NIP47Error {
+                code,
+                message: message.to_owned(),
+            }),
+            result: None,
+        }
+    }
+
+    /// `None` means "don't answer".
+    fn respond(
+        request: Request,
+        seed: &[u8; 32],
+        paid: &Mutex<HashMap<String, String>>,
+    ) -> Option<Response> {
+        match request.params {
+            RequestParams::GetInfo => Some(Response {
+                result_type: Method::GetInfo,
+                error: None,
+                result: Some(ResponseResult::GetInfo(GetInfoResponse {
+                    alias: Some("mergetip-mock".into()),
+                    color: None,
+                    pubkey: None,
+                    network: Some("regtest".into()),
+                    block_height: None,
+                    block_hash: None,
+                    methods: METHODS.iter().filter_map(|m| m.parse().ok()).collect(),
+                    notifications: Vec::new(),
+                })),
+            }),
+            RequestParams::PayInvoice(pay) => {
+                let invoice: Bolt11Invoice = match pay.invoice.parse() {
+                    Ok(invoice) => invoice,
+                    Err(_) => {
+                        return Some(error(Method::PayInvoice, ErrorCode::Other, "bad invoice"));
+                    }
+                };
+                let sats = invoice.amount_milli_satoshis().unwrap_or(0) / 1_000;
+                let hash = hex::encode(invoice.payment_hash().to_byte_array());
+                match sats {
+                    behaviour::INSUFFICIENT_BALANCE_SATS => Some(error(
+                        Method::PayInvoice,
+                        ErrorCode::InsufficientBalance,
+                        "not enough sats",
+                    )),
+                    behaviour::QUOTA_EXCEEDED_SATS => Some(error(
+                        Method::PayInvoice,
+                        ErrorCode::QuotaExceeded,
+                        "budget used up",
+                    )),
+                    behaviour::NEVER_ANSWERS_SATS => None,
+                    _ => {
+                        let Some(preimage) = preimage_from_invoice(seed, &pay.invoice) else {
+                            return Some(error(
+                                Method::PayInvoice,
+                                ErrorCode::Other,
+                                "unknown invoice",
+                            ));
+                        };
+                        if sha256::Hash::hash(&preimage).to_byte_array()
+                            != invoice.payment_hash().to_byte_array()
+                        {
+                            return Some(error(
+                                Method::PayInvoice,
+                                ErrorCode::PaymentFailed,
+                                "no route",
+                            ));
+                        }
+                        let preimage = hex::encode(preimage);
+                        paid.lock()
+                            .unwrap_or_else(|p| p.into_inner())
+                            .insert(hash, preimage.clone());
+                        if sats == behaviour::PAYS_SILENTLY_SATS {
+                            return None;
+                        }
+                        Some(Response {
+                            result_type: Method::PayInvoice,
+                            error: None,
+                            result: Some(ResponseResult::PayInvoice(PayInvoiceResponse {
+                                preimage,
+                                fees_paid: Some(0),
+                            })),
+                        })
+                    }
+                }
+            }
+            RequestParams::LookupInvoice(lookup) => {
+                let hash = lookup.payment_hash.unwrap_or_default();
+                let preimage = paid
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .get(&hash)
+                    .cloned();
+                Some(match preimage {
+                    Some(preimage) => Response {
+                        result_type: Method::LookupInvoice,
+                        error: None,
+                        result: Some(ResponseResult::LookupInvoice(LookupInvoiceResponse {
+                            transaction_type: Some(TransactionType::Outgoing),
+                            state: Some(TransactionState::Settled),
+                            invoice: None,
+                            description: None,
+                            description_hash: None,
+                            preimage: Some(preimage),
+                            payment_hash: hash,
+                            amount: 0,
+                            fees_paid: 0,
+                            created_at: Timestamp::now(),
+                            expires_at: None,
+                            settled_at: Some(Timestamp::now()),
+                            metadata: None,
+                        })),
+                    },
+                    None => error(
+                        Method::LookupInvoice,
+                        ErrorCode::NotFound,
+                        "unknown payment",
+                    ),
+                })
+            }
+            _ => Some(error(
+                Method::GetInfo,
+                ErrorCode::NotImplemented,
+                "not supported",
+            )),
+        }
+    }
+}

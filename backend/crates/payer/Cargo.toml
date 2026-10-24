@@ -16,6 +16,7 @@ mergetip-crypto.workspace = true
 async-trait.workspace = true
 hex.workspace = true
 lightning-invoice.workspace = true
+nostr.workspace = true
 nostr-sdk.workspace = true
 reqwest.workspace = true
 serde.workspace = true
@@ -33,4 +34,5 @@ testing = ["dep:bitcoin"]
 
 [dev-dependencies]
 bitcoin.workspace = true
+nostr-sdk = { workspace = true, features = ["local-relay"] }
 wiremock.workspace = true

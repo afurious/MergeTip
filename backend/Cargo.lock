@@ -24,6 +24,17 @@ dependencies = [
 
 [[package]]
 name = "aes"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b169f7a6d4742236a0a00c541b845991d0ac43e546831af1249753ab4c3aa3a0"
+dependencies = [
+ "cfg-if",
+ "cipher 0.4.4",
+ "cpufeatures 0.2.17",
+]
+
+[[package]]
+name = "aes"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "35f0f96ce78e38c3dc6d8948aa8163d06385be74000f3c7a95bf1eef35d3ea32"
@@ -41,7 +52,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f2b8006a0c83f52b62ba44a97b58bf76fe2f70a329e588f67f89691d93d498f"
 dependencies = [
  "aead 0.6.1",
- "aes",
+ "aes 0.9.3",
  "cipher 0.5.2",
  "ctr",
  "ctutils",
@@ -501,6 +512,12 @@ dependencies = [
  "quote",
  "syn 3.0.9",
 ]
+
+[[package]]
+name = "btreecap"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6160c957d8aa33d0a8ba1dbab98e3cb57023ad9374c501441e88559f99e6c4c9"
 
 [[package]]
 name = "bumpalo"
@@ -2105,6 +2122,7 @@ dependencies = [
  "lightning-invoice",
  "mergetip-core",
  "mergetip-crypto",
+ "nostr",
  "nostr-sdk",
  "reqwest",
  "serde",
@@ -2228,6 +2246,7 @@ version = "0.45.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "38ca5c25a6df8d4d78fdf39b42792438f6ce22b4809ccbfdb27582ed9ca45407"
 dependencies = [
+ "aes 0.8.4",
  "base64 0.22.1",
  "bech32 0.12.0",
  "bip39",
@@ -2268,6 +2287,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "nostr-memory"
+version = "0.45.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5a9091e50b0ebcf8d9bd8ded23665d0434aa0eeb22b8464fc882ac124dbe5bf"
+dependencies = [
+ "btreecap",
+ "nostr",
+ "nostr-database",
+ "tokio",
+]
+
+[[package]]
 name = "nostr-sdk"
 version = "0.45.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2282,6 +2313,7 @@ dependencies = [
  "nostr",
  "nostr-database",
  "nostr-gossip",
+ "nostr-memory",
  "opaquerr",
  "rand 0.10.3",
  "tokio",

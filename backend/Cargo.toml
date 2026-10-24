@@ -57,6 +57,7 @@ utoipa = { version = "6", features = ["axum_extras", "uuid", "time"] }
 # integrations
 octocrab = "0.54"
 nostr-sdk = "0.45"
+nostr = { version = "0.45", features = ["nip47"] }
 # Only for its re-exported secp256k1, to sign invoices in tests and the local mocks.
 bitcoin = { version = "0.32", default-features = false, features = ["std", "secp-recovery"] }
 lightning-invoice = "0.34"
