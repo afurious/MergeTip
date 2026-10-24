@@ -11,6 +11,28 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Liveness probe for load balancers.
+         * @description Deliberately touches no dependencies, so a database outage doesn't take every machine out of
+         *     rotation at once.
+         */
+        get: operations["healthz"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Service status and build version. */
         get: operations["health"];
         put?: never;
         post?: never;
@@ -23,7 +45,22 @@ export interface paths {
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: never;
+    schemas: {
+        ErrorBody: {
+            error: components["schemas"]["ErrorDetail"];
+        };
+        ErrorDetail: {
+            /** @description Stable `snake_case` identifier, e.g. `nwc_invalid_uri`. */
+            code: string;
+            message: string;
+        };
+        Health: {
+            /** @description Always `ok` when the process can serve requests. */
+            status: string;
+            /** @description The running build's version. */
+            version: string;
+        };
+    };
     responses: never;
     parameters: never;
     requestBodies: never;
@@ -32,6 +69,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    healthz: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The process is up */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
     health: {
         parameters: {
             query?: never;
@@ -41,13 +98,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Service is up */
+            /** @description The service is up */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/plain": string;
+                    "application/json": components["schemas"]["Health"];
                 };
             };
         };

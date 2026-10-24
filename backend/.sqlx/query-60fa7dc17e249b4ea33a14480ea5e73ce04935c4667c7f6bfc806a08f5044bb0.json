@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO github_events (delivery_id, event, action, payload)\n        VALUES ($1, $2, $3, $4)\n        ON CONFLICT (delivery_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "60fa7dc17e249b4ea33a14480ea5e73ce04935c4667c7f6bfc806a08f5044bb0"
+}

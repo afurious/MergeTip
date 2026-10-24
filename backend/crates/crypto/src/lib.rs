@@ -1,12 +1,12 @@
-//! Envelope encryption (AES-256-GCM data keys wrapped by a master key) and HMAC helpers.
+//! Envelope encryption (AES-256-GCM data keys wrapped by a master key), HMAC helpers, tokens and
+//! the [`Redacted`] wrapper that keeps secrets out of logs.
 
-use std::fmt;
+mod envelope;
+mod mac;
+mod redacted;
+mod token;
 
-/// Wrapper that keeps secrets out of `Debug` output and logs.
-pub struct Redacted<T>(pub T);
-
-impl<T> fmt::Debug for Redacted<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("[REDACTED]")
-    }
-}
+pub use envelope::{EnvelopeError, KeyError, Keyring};
+pub use mac::{SignatureError, hmac_sha256, verify_github_signature};
+pub use redacted::Redacted;
+pub use token::{RandomError, Token, hash_token, random_bytes, random_token};

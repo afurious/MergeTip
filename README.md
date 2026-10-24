@@ -24,7 +24,8 @@ Connect (NWC), and receivers get paid to their own Lightning address.
 │   │   ├── fiat/            # Bitnob client: quotes, payouts, webhooks
 │   │   ├── notify/          # email (Resend/Postmark) + templates
 │   │   ├── store/           # sqlx repositories, job queue
-│   │   └── crypto/          # envelope encryption, HMAC helpers, Redacted<T>
+│   │   ├── crypto/          # envelope encryption, HMAC helpers, Redacted<T>
+│   │   └── runtime/         # config, tracing, database pool, shutdown (shared by binaries)
 │   ├── devtools/            # mock NWC wallet + mock LNURL server for local dev and tests
 │   ├── migrations/          # SQL migrations (sqlx)
 │   └── Dockerfile           # builds any backend binary (BIN build arg)
@@ -69,7 +70,7 @@ make migrate        # apply migrations
 make dev            # api :8080, worker, web :5173
 ```
 
-Other tasks: `make help`.
+Other tasks: `make help`. Backend details: [`docs/backend/README.md`](docs/backend/README.md).
 
 Working on one side only:
 

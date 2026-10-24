@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT from_state, to_state, detail, at FROM tip_events\n        WHERE tip_id = $1 ORDER BY id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "from_state",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tip_events",
+            "name": "from_state"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "to_state",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tip_events",
+            "name": "to_state"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "detail",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "tip_events",
+            "name": "detail"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "tip_events",
+            "name": "at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a1408553421fc1f3c867287822caef71bfefd5b6b4dd9bb50c198e7fa1d23418"
+}

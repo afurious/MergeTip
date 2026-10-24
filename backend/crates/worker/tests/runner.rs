@@ -1,0 +1,374 @@
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
+};
+
+use async_trait::async_trait;
+use mergetip_core::{FixedClock, SystemClock};
+use mergetip_store::jobs::{self, Job, NewJob};
+use mergetip_worker::{JobContext, JobError, JobHandler, JobOutcome, Runner, RunnerConfig};
+use serde_json::json;
+use sqlx::PgPool;
+use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
+
+fn fast_config() -> RunnerConfig {
+    RunnerConfig {
+        concurrency: 4,
+        poll_interval: Duration::from_millis(50),
+        drain_timeout: Duration::from_secs(5),
+        retry_base: Duration::ZERO,
+        retry_cap: Duration::ZERO,
+        ..RunnerConfig::default()
+    }
+}
+
+/// Reports every payload it handles; fails the first `fail_first` runs with `error`.
+struct Recorder {
+    seen: mpsc::UnboundedSender<serde_json::Value>,
+    runs: AtomicUsize,
+    fail_first: usize,
+    error: fn() -> JobError,
+    delay: Duration,
+}
+
+impl Recorder {
+    fn new(seen: mpsc::UnboundedSender<serde_json::Value>) -> Self {
+        Self {
+            seen,
+            runs: AtomicUsize::new(0),
+            fail_first: 0,
+            error: || JobError::retryable("flaky"),
+            delay: Duration::ZERO,
+        }
+    }
+}
+
+#[async_trait]
+impl JobHandler for Recorder {
+    fn kind(&self) -> &'static str {
+        "record"
+    }
+
+    async fn handle(&self, _ctx: &JobContext, job: &Job) -> Result<JobOutcome, JobError> {
+        tokio::time::sleep(self.delay).await;
+        let run = self.runs.fetch_add(1, Ordering::SeqCst);
+        if run < self.fail_first {
+            return Err((self.error)());
+        }
+        self.seen.send(job.payload.clone()).ok();
+        Ok(JobOutcome::Done)
+    }
+}
+
+async fn enqueue(pool: &PgPool, job: NewJob) {
+    let mut conn = pool.acquire().await.unwrap();
+    jobs::enqueue(&mut conn, &job).await.unwrap();
+}
+
+async fn job_rows(pool: &PgPool) -> (i64, i64) {
+    let row = sqlx::query!(r#"SELECT count(*) AS "total!", count(dead_at) AS "dead!" FROM jobs"#)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    (row.total, row.dead)
+}
+
+fn start(pool: &PgPool, handler: Recorder) -> (CancellationToken, tokio::task::JoinHandle<()>) {
+    start_with(pool, handler, fast_config())
+}
+
+fn start_with(
+    pool: &PgPool,
+    handler: Recorder,
+    config: RunnerConfig,
+) -> (CancellationToken, tokio::task::JoinHandle<()>) {
+    let shutdown = CancellationToken::new();
+    let runner = Runner::new(pool.clone(), Arc::new(SystemClock), config)
+        .unwrap()
+        .register(handler);
+    let handle = tokio::spawn(runner.run(shutdown.clone()));
+    (shutdown, handle)
+}
+
+async fn recv(rx: &mut mpsc::UnboundedReceiver<serde_json::Value>) -> serde_json::Value {
+    tokio::time::timeout(Duration::from_secs(10), rx.recv())
+        .await
+        .expect("job handled in time")
+        .expect("handler alive")
+}
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn runs_enqueued_jobs_and_deletes_them(pool: PgPool) -> sqlx::Result<()> {
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let (shutdown, handle) = start(&pool, Recorder::new(tx));
+
+    for n in 0..5 {
+        enqueue(&pool, NewJob::new("record", json!({ "n": n }))).await;
+    }
+    let mut seen = Vec::new();
+    for _ in 0..5 {
+        seen.push(recv(&mut rx).await["n"].as_i64().unwrap());
+    }
+    seen.sort_unstable();
+    assert_eq!(seen, [0, 1, 2, 3, 4]);
+
+    shutdown.cancel();
+    handle.await.unwrap();
+    assert_eq!(job_rows(&pool).await, (0, 0));
+    Ok(())
+}
+
+/// With polling effectively off, only the NOTIFY sent on enqueue can wake a slot.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn enqueue_notification_wakes_an_idle_slot(pool: PgPool) -> sqlx::Result<()> {
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let config = RunnerConfig {
+        poll_interval: Duration::from_secs(30),
+        ..fast_config()
+    };
+    let (shutdown, handle) = start_with(&pool, Recorder::new(tx), config);
+    // Let every slot finish its first empty claim and go idle.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    for n in 0..3 {
+        enqueue(&pool, NewJob::new("record", json!({ "n": n }))).await;
+        let seen = tokio::time::timeout(Duration::from_secs(3), rx.recv())
+            .await
+            .expect("woken by NOTIFY, not by the 30 s poll");
+        assert_eq!(seen, Some(json!({ "n": n })));
+    }
+
+    shutdown.cancel();
+    handle.await.unwrap();
+    Ok(())
+}
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn retryable_failures_are_retried(pool: PgPool) -> sqlx::Result<()> {
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let handler = Recorder {
+        fail_first: 2,
+        ..Recorder::new(tx)
+    };
+    let (shutdown, handle) = start(&pool, handler);
+
+    enqueue(&pool, NewJob::new("record", json!({ "n": 1 }))).await;
+    assert_eq!(recv(&mut rx).await, json!({ "n": 1 }));
+
+    shutdown.cancel();
+    handle.await.unwrap();
+    assert_eq!(job_rows(&pool).await, (0, 0));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn exhausted_retries_dead_letter(pool: PgPool) -> sqlx::Result<()> {
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let handler = Recorder {
+        fail_first: usize::MAX,
+        ..Recorder::new(tx)
+    };
+    let (shutdown, handle) = start(&pool, handler);
+
+    enqueue(&pool, NewJob::new("record", json!({})).max_attempts(3)).await;
+    wait_until(|| async { job_rows(&pool).await == (1, 1) }).await;
+
+    let error = sqlx::query_scalar!("SELECT last_error FROM jobs")
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(error.as_deref(), Some("flaky"));
+    let attempts = sqlx::query_scalar!("SELECT attempts FROM jobs")
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(attempts, 3);
+
+    shutdown.cancel();
+    handle.await.unwrap();
+    Ok(())
+}
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn permanent_error_is_not_retried(pool: PgPool) -> sqlx::Result<()> {
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let handler = Recorder {
+        fail_first: usize::MAX,
+        error: || JobError::permanent("invalid payload"),
+        ..Recorder::new(tx)
+    };
+    let (shutdown, handle) = start(&pool, handler);
+
+    enqueue(&pool, NewJob::new("record", json!({}))).await;
+    wait_until(|| async { job_rows(&pool).await == (1, 1) }).await;
+    let attempts = sqlx::query_scalar!("SELECT attempts FROM jobs")
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(attempts, 1);
+
+    shutdown.cancel();
+    handle.await.unwrap();
+    Ok(())
+}
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn shutdown_drains_the_job_in_flight(pool: PgPool) -> sqlx::Result<()> {
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let handler = Recorder {
+        delay: Duration::from_millis(500),
+        ..Recorder::new(tx)
+    };
+    let (shutdown, handle) = start(&pool, handler);
+
+    enqueue(&pool, NewJob::new("record", json!({ "slow": true }))).await;
+    wait_until(|| async {
+        sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM jobs WHERE locked_at IS NOT NULL"#)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+            == 1
+    })
+    .await;
+
+    shutdown.cancel();
+    handle.await.unwrap();
+    assert_eq!(recv(&mut rx).await, json!({ "slow": true }));
+    assert_eq!(
+        job_rows(&pool).await,
+        (0, 0),
+        "in-flight job finished before exit"
+    );
+    Ok(())
+}
+
+async fn wait_until<F, Fut>(mut condition: F)
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = bool>,
+{
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while !condition().await {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("condition met in time");
+}
+
+/// A worker whose clock is wrong (here: years behind the database) must still wait the full
+/// retry delay, because retry times come from the database clock.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn retry_delay_ignores_a_skewed_worker_clock(pool: PgPool) -> sqlx::Result<()> {
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let handler = Recorder {
+        fail_first: 1,
+        error: || JobError::retry_after("rate limited", Duration::from_secs(3600)),
+        ..Recorder::new(tx)
+    };
+    let skewed = Arc::new(FixedClock::new(
+        time::macros::datetime!(2000-01-01 0:00 UTC),
+    ));
+    let shutdown = CancellationToken::new();
+    let runner = Runner::new(pool.clone(), skewed, fast_config())
+        .unwrap()
+        .register(handler);
+    let handle = tokio::spawn(runner.run(shutdown.clone()));
+
+    enqueue(&pool, NewJob::new("record", json!({}))).await;
+    wait_until(|| async {
+        sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM jobs WHERE last_error IS NOT NULL"#)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+            == 1
+    })
+    .await;
+    assert!(
+        tokio::time::timeout(Duration::from_millis(500), rx.recv())
+            .await
+            .is_err(),
+        "the retry ran early"
+    );
+    let wait = sqlx::query_scalar!(
+        r#"SELECT extract(epoch FROM run_at - now())::float8 AS "secs!" FROM jobs"#
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(wait > 3500.0, "run_at is only {wait}s away");
+
+    shutdown.cancel();
+    handle.await.unwrap();
+    Ok(())
+}
+
+/// A job that outlives its lease is still run exactly once, because the runner renews the lease.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn long_job_is_not_run_twice(pool: PgPool) -> sqlx::Result<()> {
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let handler = Recorder {
+        delay: Duration::from_millis(2_500),
+        ..Recorder::new(tx)
+    };
+    let config = RunnerConfig {
+        lease: Duration::from_secs(1),
+        ..fast_config()
+    };
+    let (shutdown, handle) = start_with(&pool, handler, config);
+
+    enqueue(&pool, NewJob::new("record", json!({ "long": true }))).await;
+    assert_eq!(recv(&mut rx).await, json!({ "long": true }));
+    assert!(
+        tokio::time::timeout(Duration::from_secs(3), rx.recv())
+            .await
+            .is_err(),
+        "the job ran a second time"
+    );
+    assert_eq!(job_rows(&pool).await, (0, 0));
+
+    shutdown.cancel();
+    handle.await.unwrap();
+    Ok(())
+}
+
+/// A handler still running when the drain times out is stopped, not left running detached.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn drain_timeout_stops_the_handler(pool: PgPool) -> sqlx::Result<()> {
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let handler = Recorder {
+        delay: Duration::from_millis(1_500),
+        ..Recorder::new(tx)
+    };
+    let config = RunnerConfig {
+        drain_timeout: Duration::from_millis(200),
+        ..fast_config()
+    };
+    let (shutdown, handle) = start_with(&pool, handler, config);
+
+    enqueue(&pool, NewJob::new("record", json!({ "stuck": true }))).await;
+    wait_until(|| async {
+        sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM jobs WHERE locked_at IS NOT NULL"#)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+            == 1
+    })
+    .await;
+    shutdown.cancel();
+    handle.await.unwrap();
+
+    // An aborted handler drops its sender, so `recv` ends with `None`; a detached handler
+    // would deliver its payload once its 1.5 s delay is over.
+    let outcome = tokio::time::timeout(Duration::from_secs(2), rx.recv()).await;
+    assert!(
+        !matches!(outcome, Ok(Some(_))),
+        "the handler kept running after the runner stopped"
+    );
+    assert_eq!(
+        job_rows(&pool).await,
+        (1, 0),
+        "the job stays leased for another worker to reclaim"
+    );
+    Ok(())
+}

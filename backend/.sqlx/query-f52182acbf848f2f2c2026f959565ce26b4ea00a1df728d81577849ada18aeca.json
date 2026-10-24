@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO users (github_id, github_login) VALUES (2, 'ALICE')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "f52182acbf848f2f2c2026f959565ce26b4ea00a1df728d81577849ada18aeca"
+}

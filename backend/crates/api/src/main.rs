@@ -1,20 +1,58 @@
-//! MergeTip HTTP API: webhooks, auth and the `/v1` REST surface.
+//! MergeTip HTTP API server.
 
-use axum::{Router, routing::get};
-use tracing_subscriber::EnvFilter;
+use std::sync::Arc;
+
+use anyhow::Context;
+use clap::{Parser, Subcommand};
+use mergetip_api::{ApiConfig, AppState, openapi, router};
+use mergetip_core::SystemClock;
+use mergetip_runtime::{config::ProcessEnv, db, shutdown, telemetry};
+
+#[derive(Debug, Parser)]
+#[command(name = "mergetip-api", version, about)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Serve the HTTP API (the default).
+    Serve,
+    /// Print the OpenAPI document to stdout.
+    Openapi,
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    match Cli::parse().command.unwrap_or(Command::Serve) {
+        Command::Openapi => {
+            print!("{}", openapi::json());
+            Ok(())
+        }
+        Command::Serve => serve().await,
+    }
+}
+
+async fn serve() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
+    let config = Arc::new(ApiConfig::from_env(&ProcessEnv).context("invalid configuration")?);
+    telemetry::init(config.app_env);
 
-    let app = Router::new().route("/healthz", get(|| async { "ok" }));
+    let pool = db::connect(config.database_url.expose(), 10)
+        .await
+        .context("cannot connect to the database")?;
+    let state = AppState::new(pool, config.clone(), Arc::new(SystemClock));
 
-    let addr = std::env::var("API_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".into());
-    let listener = tokio::net::TcpListener::bind(&addr).await?;
-    tracing::info!(%addr, "mergetip-api listening");
-    axum::serve(listener, app).await?;
+    let listener = tokio::net::TcpListener::bind(config.addr)
+        .await
+        .with_context(|| format!("cannot bind {}", config.addr))?;
+    tracing::info!(addr = %config.addr, env = %config.app_env, "mergetip-api listening");
+
+    let shutdown = shutdown::on_signal();
+    axum::serve(listener, router(state))
+        .with_graceful_shutdown(shutdown.cancelled_owned())
+        .await
+        .context("server error")?;
     Ok(())
 }

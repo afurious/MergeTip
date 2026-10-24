@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: mergetip
       POSTGRES_PASSWORD: mergetip
       POSTGRES_DB: mergetip
-    ports: ["5432:5432"]
+    ports: ["${POSTGRES_PORT:-5432}:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mergetip"]

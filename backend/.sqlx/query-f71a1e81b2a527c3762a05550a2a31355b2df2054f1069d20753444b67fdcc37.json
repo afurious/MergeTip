@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT delivery_id, event, action, payload, received_at, processed_at\n        FROM github_events WHERE delivery_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "delivery_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "github_events",
+            "name": "delivery_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "event",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "github_events",
+            "name": "event"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "action",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "github_events",
+            "name": "action"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "payload",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "github_events",
+            "name": "payload"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "received_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "github_events",
+            "name": "received_at"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "processed_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "github_events",
+            "name": "processed_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "f71a1e81b2a527c3762a05550a2a31355b2df2054f1069d20753444b67fdcc37"
+}

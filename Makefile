@@ -3,11 +3,15 @@ SHELL := bash
 BACKEND := backend
 FRONTEND := frontend
 
-.PHONY: help bootstrap up down dev dev-api dev-worker dev-web dev-app smee migrate openapi \
-        fmt lint test check clean
+# Load local settings (DATABASE_URL etc.) when present; the file is git-ignored.
+-include .env
+export DATABASE_URL
+
+.PHONY: help bootstrap up down dev dev-api dev-worker dev-web dev-app smee migrate migrate-new \
+        sqlx-prepare openapi fmt lint test check check-backend clean
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## ' $(firstword $(MAKEFILE_LIST)) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
 bootstrap: ## Install toolchains and dependencies
 	rustup show active-toolchain
@@ -44,8 +48,18 @@ smee: ## Forward GitHub webhooks to the local api
 migrate: ## Apply database migrations
 	cd $(BACKEND) && sqlx migrate run
 
+migrate-new: ## Create a migration: make migrate-new name=add_things
+	@[ -n "$(name)" ] || { echo "usage: make migrate-new name=<snake_case_name>"; exit 1; }
+	cd $(BACKEND) && sqlx migrate add $(name)
+
+sqlx-prepare: ## Refresh backend/.sqlx offline query data (needs DATABASE_URL)
+	cd $(BACKEND) && cargo sqlx prepare --workspace -- --all-targets
+
 openapi: ## Regenerate openapi/openapi.json and the TS client
-	@echo "TODO: dump the utoipa spec from mergetip-api into openapi/openapi.json"
+	@# Build into a temp file first: a failed build must not truncate the committed spec.
+	cd $(BACKEND) && cargo run --quiet -p mergetip-api -- openapi > ../openapi/openapi.json.tmp \
+		&& mv ../openapi/openapi.json.tmp ../openapi/openapi.json \
+		|| { rm -f ../openapi/openapi.json.tmp; exit 1; }
 	cd $(FRONTEND) && pnpm gen:api
 
 fmt: ## Format all code
@@ -58,6 +72,12 @@ lint: ## Lint all code
 
 check: ## Type-check the frontend
 	cd $(FRONTEND) && pnpm check
+
+check-backend: ## Backend gate: fmt, clippy, tests, sqlx offline data (needs DATABASE_URL)
+	cd $(BACKEND) && cargo fmt --all --check
+	cd $(BACKEND) && cargo clippy --workspace --all-targets -- -D warnings
+	cd $(BACKEND) && cargo test --workspace
+	cd $(BACKEND) && cargo sqlx prepare --workspace --check -- --all-targets
 
 test: ## Run all tests
 	cd $(BACKEND) && cargo test --workspace
