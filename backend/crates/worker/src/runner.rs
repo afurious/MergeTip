@@ -15,7 +15,10 @@ use mergetip_store::{
     jobs::{self, Job},
 };
 use sqlx::postgres::PgListener;
-use tokio::{sync::Notify, task::JoinSet};
+use tokio::{
+    sync::Notify,
+    task::{JoinHandle, JoinSet},
+};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
@@ -273,10 +276,10 @@ impl Runner {
             // A separate task, so a panicking handler fails its job instead of the slot.
             let ctx = self.ctx.clone();
             let task_job = job.clone();
-            let handler_task = tokio::spawn(
+            let mut handler_task = AbortOnDrop(tokio::spawn(
                 async move { handler.handle(&ctx, &task_job).await }.in_current_span(),
-            );
-            let Some(result) = self.supervise(&job, handler_task).await else {
+            ));
+            let Some(result) = self.supervise(&job, &mut handler_task.0).await else {
                 return;
             };
 
@@ -315,14 +318,14 @@ impl Runner {
     async fn supervise(
         &self,
         job: &Job,
-        mut handler_task: tokio::task::JoinHandle<Result<JobOutcome, JobError>>,
+        handler_task: &mut JoinHandle<Result<JobOutcome, JobError>>,
     ) -> Option<Result<JobOutcome, JobError>> {
         let period = (self.config.lease / 3).max(Duration::from_millis(10));
         let mut renew = tokio::time::interval_at(tokio::time::Instant::now() + period, period);
         renew.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             tokio::select! {
-                joined = &mut handler_task => {
+                joined = &mut *handler_task => {
                     return Some(joined.unwrap_or_else(|join_err| {
                         Err(JobError::retryable(format!("handler panicked: {join_err}")))
                     }));
@@ -360,6 +363,19 @@ impl Runner {
             }
             Err(err) => tracing::error!(error = %err, "recording the job result failed"),
         }
+    }
+}
+
+/// Owns a handler task and aborts it when dropped.
+///
+/// When the drain timeout aborts a slot, the slot's future is dropped mid-job. Without this guard
+/// the spawned handler would keep running detached, possibly finishing its side effect while its
+/// result is never recorded, and the job would then run again once its lease expired.
+struct AbortOnDrop<T>(JoinHandle<T>);
+
+impl<T> Drop for AbortOnDrop<T> {
+    fn drop(&mut self) {
+        self.0.abort();
     }
 }
 

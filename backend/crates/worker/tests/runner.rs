@@ -331,3 +331,44 @@ async fn long_job_is_not_run_twice(pool: PgPool) -> sqlx::Result<()> {
     handle.await.unwrap();
     Ok(())
 }
+
+/// A handler still running when the drain times out is stopped, not left running detached.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn drain_timeout_stops_the_handler(pool: PgPool) -> sqlx::Result<()> {
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let handler = Recorder {
+        delay: Duration::from_millis(1_500),
+        ..Recorder::new(tx)
+    };
+    let config = RunnerConfig {
+        drain_timeout: Duration::from_millis(200),
+        ..fast_config()
+    };
+    let (shutdown, handle) = start_with(&pool, handler, config);
+
+    enqueue(&pool, NewJob::new("record", json!({ "stuck": true }))).await;
+    wait_until(|| async {
+        sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM jobs WHERE locked_at IS NOT NULL"#)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+            == 1
+    })
+    .await;
+    shutdown.cancel();
+    handle.await.unwrap();
+
+    // An aborted handler drops its sender, so `recv` ends with `None`; a detached handler
+    // would deliver its payload once its 1.5 s delay is over.
+    let outcome = tokio::time::timeout(Duration::from_secs(2), rx.recv()).await;
+    assert!(
+        !matches!(outcome, Ok(Some(_))),
+        "the handler kept running after the runner stopped"
+    );
+    assert_eq!(
+        job_rows(&pool).await,
+        (1, 0),
+        "the job stays leased for another worker to reclaim"
+    );
+    Ok(())
+}
