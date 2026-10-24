@@ -446,3 +446,18 @@ async fn concurrent_status_updates_both_survive(pool: PgPool) -> sqlx::Result<()
     );
     Ok(())
 }
+
+/// GitHub answering "not found" for good must close the tip, not strand it in `verifying`.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn tips_github_can_no_longer_verify_are_closed(pool: PgPool) -> sqlx::Result<()> {
+    let mut h = Harness::new(pool, true);
+    h.github.state().pulls.clear(); // the PR is gone by the time verification runs
+    h.comment(1001, (10, "maintainer"), "/tip @reviewer 100", 42)
+        .await;
+
+    let tips = h.tips().await;
+    assert_eq!(states(&tips), ["rejected"]);
+    assert_eq!(tips[0].2.as_deref(), Some("verification_unavailable"));
+    assert!(h.github.posted_bodies()[0].contains("I couldn't check this tip on GitHub"));
+    Ok(())
+}

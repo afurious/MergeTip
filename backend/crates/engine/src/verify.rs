@@ -69,7 +69,20 @@ impl Engine {
 
         let verification = match verifier::verify(self.github.as_ref(), &request).await {
             Ok(verification) => verification,
-            Err(VerifyError::GitHub(err)) => return Err(err.into()),
+            // Transient trouble (outage, rate limit): retry later; never a verdict.
+            Err(VerifyError::GitHub(err)) if err.is_retryable() => return Err(err.into()),
+            // GitHub answered for good (thread or repository gone, App uninstalled): retrying
+            // can't help, so close the tip instead of leaving it in `verifying` forever.
+            Err(VerifyError::GitHub(err)) => {
+                tracing::warn!(tip_id = %tip.id, error = %err, "tip can no longer be verified");
+                return self
+                    .reject(
+                        &tip,
+                        installation.github_installation_id,
+                        "verification_unavailable",
+                    )
+                    .await;
+            }
             Err(VerifyError::Rejected(rejection)) => {
                 return self
                     .reject(&tip, installation.github_installation_id, rejection.code())

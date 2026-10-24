@@ -98,6 +98,10 @@ pub fn rejected(code: &str, tip: &TipContext<'_>, limits: &Limits, settings_link
             "😕 @{sender}, **{}** is above your per-tip limit of **{}**. [Manage limits]({settings_link})",
             tip.amount, limits.per_tip_max
         ),
+        "verification_unavailable" => format!(
+            "😕 @{sender}, I couldn't check this tip on GitHub (the thread may have moved or the \
+             App lost access), so it wasn't sent."
+        ),
         _ => format!("😕 @{sender}, this tip couldn't be sent."),
     }
 }
@@ -206,6 +210,7 @@ mod tests {
             "rate_limited_sender",
             "pair_limit",
             "over_per_tip_cap",
+            "verification_unavailable",
             "something_new",
         ];
         let rendered: Vec<String> = codes
