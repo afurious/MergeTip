@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT suspended_at IS NOT NULL AS \"s!\" FROM installations",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "s!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2f5e432eea77f2152ba54c5ec0e12c3b0efd95adfe98140f66d1d718a0ccd75f"
+}

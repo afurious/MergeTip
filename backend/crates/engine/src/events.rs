@@ -59,24 +59,32 @@ impl Engine {
         let id = GithubInstallationId::new(event.installation.id);
         let now = self.clock.now();
         let mut tx = self.pool.begin().await?;
+        let login = || {
+            event
+                .installation
+                .account
+                .as_ref()
+                .map(|a| a.login.clone())
+                .ok_or_else(|| {
+                    EngineError::Malformed("installation event without an account".into())
+                })
+        };
+        // Only installing (again) or an explicit unsuspend may clear a suspension. Other actions,
+        // such as `new_permissions_accepted`, arrive for suspended installations too.
         match event.action.as_str() {
             "deleted" => installations::delete(&mut tx, id, now).await?,
             "suspend" => installations::set_suspended(&mut *tx, id, Some(now)).await?,
-            action => {
-                let login = event
-                    .installation
-                    .account
-                    .as_ref()
-                    .map(|a| a.login.clone())
-                    .ok_or_else(|| {
-                        EngineError::Malformed("installation event without an account".into())
-                    })?;
-                let installation = installations::upsert(&mut *tx, id, &login).await?;
-                if action == "created"
-                    && let Some(repos) = &event.repositories
-                {
+            "created" => {
+                let installation = installations::upsert(&mut *tx, id, &login()?).await?;
+                if let Some(repos) = &event.repositories {
                     installations::set_repos(&mut tx, installation.id, &to_repos(repos)).await?;
                 }
+            }
+            "unsuspend" => {
+                installations::upsert(&mut *tx, id, &login()?).await?;
+            }
+            _ => {
+                installations::ensure(&mut *tx, id, &login()?).await?;
             }
         }
         tx.commit().await?;

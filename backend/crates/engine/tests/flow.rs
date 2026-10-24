@@ -516,3 +516,60 @@ async fn suspension_stops_a_queued_payment(pool: PgPool) -> sqlx::Result<()> {
     assert!(h.github.posted_bodies().is_empty());
     Ok(())
 }
+
+/// Stores and processes an `installation` event for installation 77.
+async fn installation_event(h: &mut Harness, action: &str) {
+    let payload = json!({
+        "action": action,
+        "installation": { "id": 77, "account": { "id": 3, "login": "acme", "type": "Organization" } },
+        "repositories": [{ "id": 5, "full_name": REPO }]
+    });
+    h.deliveries += 1;
+    let delivery_id = format!("delivery-{}", h.deliveries);
+    let mut tx = h.pool.begin().await.unwrap();
+    github_events::insert_if_new(
+        &mut *tx,
+        &delivery_id,
+        "installation",
+        Some(action),
+        &payload,
+    )
+    .await
+    .unwrap();
+    mergetip_engine::jobs::enqueue(&mut tx, &ProcessEvent { delivery_id })
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    h.drain().await;
+}
+
+async fn suspended(pool: &PgPool) -> bool {
+    sqlx::query_scalar!(r#"SELECT suspended_at IS NOT NULL AS "s!" FROM installations"#)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn only_install_or_unsuspend_lifts_a_suspension(pool: PgPool) -> sqlx::Result<()> {
+    let mut h = Harness::new(pool, true);
+    installation_event(&mut h, "created").await;
+    assert!(!suspended(&h.pool).await);
+    installation_event(&mut h, "suspend").await;
+    installation_event(&mut h, "new_permissions_accepted").await;
+    assert!(
+        suspended(&h.pool).await,
+        "accepting permissions must not re-enable the App"
+    );
+
+    h.comment(1001, (10, "maintainer"), "/tip @reviewer 100", 42)
+        .await;
+    assert!(
+        h.tips().await.is_empty(),
+        "comments are ignored while suspended"
+    );
+
+    installation_event(&mut h, "unsuspend").await;
+    assert!(!suspended(&h.pool).await);
+    Ok(())
+}
