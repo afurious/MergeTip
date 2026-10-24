@@ -74,6 +74,14 @@ impl MasterKey {
     fn cipher(&self) -> Aes256Gcm {
         cipher(&self.bytes)
     }
+
+    fn subkey(&self, purpose: &str) -> Redacted<[u8; KEY_LEN]> {
+        let hkdf = Hkdf::<Sha256>::new(Some(b"mergetip-subkey-v1"), &self.bytes);
+        let mut okm = [0_u8; KEY_LEN];
+        hkdf.expand(purpose.as_bytes(), &mut okm)
+            .expect("32 bytes is a valid HKDF-SHA256 output length");
+        Redacted::new(okm)
+    }
 }
 
 fn cipher(key: &[u8; KEY_LEN]) -> Aes256Gcm {
@@ -172,12 +180,22 @@ impl Keyring {
 
     /// A 32-byte key derived from the current master key for one purpose (e.g. the OTP pepper).
     /// Distinct purposes give independent keys, so one leaked subkey exposes nothing else.
+    ///
+    /// Use this to *create* MACs and signatures. To *check* one, try every key from
+    /// [`Keyring::verification_subkeys`], or values issued before a master-key rotation (sent
+    /// unsubscribe links, live OTPs) would stop verifying the moment the key rotates.
     pub fn subkey(&self, purpose: &str) -> Redacted<[u8; KEY_LEN]> {
-        let hkdf = Hkdf::<Sha256>::new(Some(b"mergetip-subkey-v1"), &self.current.bytes);
-        let mut okm = [0_u8; KEY_LEN];
-        hkdf.expand(purpose.as_bytes(), &mut okm)
-            .expect("32 bytes is a valid HKDF-SHA256 output length");
-        Redacted::new(okm)
+        self.current.subkey(purpose)
+    }
+
+    /// The current subkey for `purpose`, then the previous master key's while a rotation is in
+    /// progress. A value verifies if it matches any of them.
+    pub fn verification_subkeys(&self, purpose: &str) -> Vec<Redacted<[u8; KEY_LEN]>> {
+        [Some(&self.current), self.previous.as_ref()]
+            .into_iter()
+            .flatten()
+            .map(|key| key.subkey(purpose))
+            .collect()
     }
 
     fn wrap_dek_into(
@@ -369,6 +387,31 @@ mod tests {
         assert_ne!(
             ring.subkey("otp").expose(),
             keyring(KEY_B, None).subkey("otp").expose()
+        );
+    }
+
+    #[test]
+    fn subkeys_issued_before_rotation_still_verify() {
+        let before = keyring(KEY_A, None);
+        let issued_with = before.subkey("unsubscribe");
+
+        let rotating = keyring(KEY_B, Some(KEY_A));
+        let accepted = rotating.verification_subkeys("unsubscribe");
+        assert_eq!(accepted.len(), 2);
+        assert_eq!(
+            accepted[0].expose(),
+            rotating.subkey("unsubscribe").expose()
+        );
+        assert!(accepted.iter().any(|k| k.expose() == issued_with.expose()));
+
+        let rotated = keyring(KEY_B, None);
+        assert_eq!(rotated.verification_subkeys("unsubscribe").len(), 1);
+        assert!(
+            !rotated
+                .verification_subkeys("unsubscribe")
+                .iter()
+                .any(|k| k.expose() == issued_with.expose()),
+            "once the old key is removed, its subkeys stop verifying"
         );
     }
 
