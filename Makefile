@@ -56,7 +56,10 @@ sqlx-prepare: ## Refresh backend/.sqlx offline query data (needs DATABASE_URL)
 	cd $(BACKEND) && cargo sqlx prepare --workspace -- --all-targets
 
 openapi: ## Regenerate openapi/openapi.json and the TS client
-	cd $(BACKEND) && cargo run --quiet -p mergetip-api -- openapi > ../openapi/openapi.json
+	@# Build into a temp file first: a failed build must not truncate the committed spec.
+	cd $(BACKEND) && cargo run --quiet -p mergetip-api -- openapi > ../openapi/openapi.json.tmp \
+		&& mv ../openapi/openapi.json.tmp ../openapi/openapi.json \
+		|| { rm -f ../openapi/openapi.json.tmp; exit 1; }
 	cd $(FRONTEND) && pnpm gen:api
 
 fmt: ## Format all code
