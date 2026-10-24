@@ -1,0 +1,8 @@
+---
+source: crates/github/src/replies.rs
+expression: "status_comment(&[held(&tip(None)), receipt(&tip(None), \"ffff0000ffff\")])"
+---
+### ⚡ MergeTip
+
+- ⏳ @maintainer will tip @reviewer **2,100 sats** when this PR is merged
+- ⚡ @maintainer tipped @reviewer **2,100 sats** · payment `ffff0000…`

@@ -1,0 +1,10 @@
+---
+source: crates/github/src/replies.rs
+expression: "parse_errors(\"maintainer\", &errors, \"/tip @username <amount>\")"
+---
+😕 @maintainer, I couldn't read these tips:
+
+- `/tip @alice two`: `two` isn't an amount.
+- `/tip 'x' 1`: Say who to tip.
+
+Usage: `/tip @username <amount>`
