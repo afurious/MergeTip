@@ -333,8 +333,9 @@ pub async fn transition(
     row.try_into()
 }
 
-/// Live tips the sender created since `since`, other than `exclude`. Rejected tips don't count,
-/// so a burst of invalid commands can't lock a sender out.
+/// Tips the sender created since `since`, other than `exclude`, rejected ones included. Every
+/// tip can make the bot post in a thread, so every tip counts toward the hourly limit; otherwise
+/// a stream of rejected tips would be unlimited bot output.
 pub async fn count_by_sender_since(
     exec: impl PgExecutor<'_>,
     sender: UserId,
@@ -344,7 +345,7 @@ pub async fn count_by_sender_since(
     let count = sqlx::query_scalar!(
         r#"
         SELECT count(*) AS "n!" FROM tips
-        WHERE sender_id = $1 AND created_at >= $2 AND id <> $3 AND state <> 'rejected'
+        WHERE sender_id = $1 AND created_at >= $2 AND id <> $3
         "#,
         sender.as_uuid(),
         since,

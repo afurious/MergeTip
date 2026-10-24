@@ -2,7 +2,9 @@
 //!
 //! Anything a user typed (notes, logins from comment text) goes through [`escape`] or a code
 //! span, so it cannot mention people or inject Markdown into a comment posted under the App's
-//! name.
+//! name. A receiver is only @-mentioned once verification has shown they contributed to the
+//! thread; before that, the login comes from the sender's text and mentioning it would let anyone
+//! make the bot ping arbitrary users.
 
 use mergetip_core::Sats;
 
@@ -39,11 +41,14 @@ pub fn held(tip: &TipContext<'_>) -> String {
     )
 }
 
+/// Sent before verification, so the receiver is not mentioned.
 pub fn connect_wallet(tip: &TipContext<'_>, link: &str) -> String {
     format!(
-        "🔌 @{}, connect your wallet to send this **{}** tip to @{} → [Connect wallet]({link}) \
+        "🔌 @{}, connect your wallet to send this **{}** tip to `{}` → [Connect wallet]({link}) \
          (held for 24 h)",
-        tip.sender, tip.amount, tip.receiver
+        tip.sender,
+        tip.amount,
+        code_span(tip.receiver)
     )
 }
 
@@ -63,25 +68,26 @@ pub struct Limits {
     pub tips_per_pair: u32,
 }
 
-/// The reply for a rejected tip, keyed by its `error_code`.
+/// The reply for a rejected tip, keyed by its `error_code`. Rejected receivers are never
+/// mentioned: most rejections mean they haven't contributed, or the login isn't theirs to claim.
 pub fn rejected(code: &str, tip: &TipContext<'_>, limits: &Limits, settings_link: &str) -> String {
-    let (sender, receiver) = (tip.sender, tip.receiver);
+    let sender = tip.sender;
+    let receiver = code_span(tip.receiver);
     match code {
         "no_contribution" => format!(
-            "😕 @{receiver} hasn't contributed to this thread yet, so this tip can't be verified."
+            "😕 @{sender}, `{receiver}` hasn't contributed to this thread yet, so this tip can't \
+             be verified."
         ),
         "unknown_user" => format!(
-            "😕 @{sender}, there is no GitHub user `{}`, so this tip can't be sent.",
-            code_span(receiver)
+            "😕 @{sender}, there is no GitHub user `{receiver}`, so this tip can't be sent."
         ),
         "self_tip" => format!("😕 @{sender}, you can't tip yourself."),
-        "bot_receiver" => format!(
-            "😕 @{sender}, `{}` is a bot account. Tips go to people.",
-            code_span(receiver)
-        ),
+        "bot_receiver" => {
+            format!("😕 @{sender}, `{receiver}` is a bot account. Tips go to people.")
+        }
         "account_too_new" => format!(
-            "😕 @{receiver}'s GitHub account is less than 30 days old, so it can't receive tips \
-             yet."
+            "😕 @{sender}, `{receiver}`'s GitHub account is less than 30 days old, so it can't \
+             receive tips yet."
         ),
         "on_merge_not_pr" => {
             format!("😕 @{sender}, `on-merge` only works on pull requests. Tip without it here.")
@@ -91,7 +97,7 @@ pub fn rejected(code: &str, tip: &TipContext<'_>, limits: &Limits, settings_link
             limits.tips_per_hour
         ),
         "pair_limit" => format!(
-            "😕 @{sender}, you've already tipped @{receiver} {} times in this thread.",
+            "😕 @{sender}, you've already tipped `{receiver}` {} times in this thread.",
             limits.tips_per_pair
         ),
         "over_per_tip_cap" => format!(
@@ -248,6 +254,36 @@ mod tests {
             "status",
             status_comment(&[held(&tip(None)), receipt(&tip(None), "ffff0000ffff")])
         );
+    }
+
+    /// Only the authenticated sender may be mentioned before verification.
+    #[test]
+    fn unverified_receivers_are_never_mentioned() {
+        let codes = [
+            "no_contribution",
+            "unknown_user",
+            "self_tip",
+            "bot_receiver",
+            "account_too_new",
+            "on_merge_not_pr",
+            "rate_limited_sender",
+            "pair_limit",
+            "over_per_tip_cap",
+            "verification_unavailable",
+            "something_new",
+        ];
+        let target = TipContext {
+            receiver: "torvalds",
+            ..tip(None)
+        };
+        let mut messages: Vec<String> = codes
+            .iter()
+            .map(|code| rejected(code, &target, &LIMITS, "https://x"))
+            .collect();
+        messages.push(connect_wallet(&target, "https://x"));
+        for message in messages {
+            assert!(!message.contains("@torvalds"), "{message}");
+        }
     }
 
     #[test]

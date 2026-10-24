@@ -2,14 +2,14 @@
 source: crates/github/src/replies.rs
 expression: "rendered.join(\"\\n\")"
 ---
-no_contribution: 😕 @reviewer hasn't contributed to this thread yet, so this tip can't be verified.
+no_contribution: 😕 @maintainer, `reviewer` hasn't contributed to this thread yet, so this tip can't be verified.
 unknown_user: 😕 @maintainer, there is no GitHub user `reviewer`, so this tip can't be sent.
 self_tip: 😕 @maintainer, you can't tip yourself.
 bot_receiver: 😕 @maintainer, `reviewer` is a bot account. Tips go to people.
-account_too_new: 😕 @reviewer's GitHub account is less than 30 days old, so it can't receive tips yet.
+account_too_new: 😕 @maintainer, `reviewer`'s GitHub account is less than 30 days old, so it can't receive tips yet.
 on_merge_not_pr: 😕 @maintainer, `on-merge` only works on pull requests. Tip without it here.
 rate_limited_sender: 😕 @maintainer, you've sent 20 tips in the last hour. Try again a little later.
-pair_limit: 😕 @maintainer, you've already tipped @reviewer 3 times in this thread.
+pair_limit: 😕 @maintainer, you've already tipped `reviewer` 3 times in this thread.
 over_per_tip_cap: 😕 @maintainer, **2,100 sats** is above your per-tip limit of **10,000 sats**. [Manage limits](https://mergetip.dev/settings/limits)
 verification_unavailable: 😕 @maintainer, I couldn't check this tip on GitHub (the thread may have moved or the App lost access), so it wasn't sent.
 something_new: 😕 @maintainer, this tip couldn't be sent.

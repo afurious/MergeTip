@@ -291,7 +291,7 @@ async fn patch_is_applied_with_the_transition_and_never_erases(pool: PgPool) -> 
 }
 
 #[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
-async fn limit_counters_skip_rejected_tips_and_the_current_one(pool: PgPool) -> sqlx::Result<()> {
+async fn limit_counters_and_rejected_tips(pool: PgPool) -> sqlx::Result<()> {
     let installation = common::installation(&pool, 1).await;
     let sender = common::user(&pool, 10, "maintainer").await;
     let mut conn = pool.acquire().await?;
@@ -333,7 +333,8 @@ async fn limit_counters_skip_rejected_tips_and_the_current_one(pool: PgPool) -> 
         tips::count_by_sender_since(&pool, sender.id, an_hour_ago, ids[2])
             .await
             .unwrap(),
-        1
+        2,
+        "the hourly count includes rejected tips, not the current one"
     );
     assert_eq!(
         tips::count_for_pair_in_thread(&pool, sender.id, "ALICE", &thread, ids[2])

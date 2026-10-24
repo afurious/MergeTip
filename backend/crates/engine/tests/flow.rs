@@ -342,7 +342,11 @@ async fn unverifiable_tips_are_rejected_with_a_reply(pool: PgPool) -> sqlx::Resu
     assert_eq!(states(&tips), ["rejected", "rejected", "rejected"]);
     assert_eq!(codes, ["no_contribution", "self_tip", "unknown_user"]);
     let posted = h.github.posted_bodies().join("\n");
-    assert!(posted.contains("@bystander hasn't contributed to this thread yet"));
+    assert!(posted.contains("`bystander` hasn't contributed to this thread yet"));
+    assert!(
+        !posted.contains("@bystander"),
+        "rejected receivers are not mentioned"
+    );
     assert!(posted.contains("you can't tip yourself"));
     assert!(posted.contains("there is no GitHub user `ghost`"));
     assert_eq!(
@@ -571,5 +575,28 @@ async fn only_install_or_unsuspend_lifts_a_suspension(pool: PgPool) -> sqlx::Res
 
     installation_event(&mut h, "unsuspend").await;
     assert!(!suspended(&h.pool).await);
+    Ok(())
+}
+
+/// Rejected tips count toward the hourly limit, so they can't be used to make the bot post
+/// without bound.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn rejected_tips_count_toward_the_hourly_limit(pool: PgPool) -> sqlx::Result<()> {
+    let mut h = Harness::new(pool, true);
+    for i in 0..5 {
+        let body: String = (0..5).map(|j| format!("/tip @ghost{i}x{j} 1\n")).collect();
+        h.comment(4000 + i, (10, "maintainer"), &body, 42).await;
+    }
+    let tips = h.tips().await;
+    assert_eq!(tips.len(), 25);
+    let codes: Vec<_> = tips.iter().map(|t| t.2.as_deref().unwrap_or("")).collect();
+    assert!(
+        codes[..20].iter().all(|c| *c == "unknown_user"),
+        "{codes:?}"
+    );
+    assert!(
+        codes[20..].iter().all(|c| *c == "rate_limited_sender"),
+        "{codes:?}"
+    );
     Ok(())
 }

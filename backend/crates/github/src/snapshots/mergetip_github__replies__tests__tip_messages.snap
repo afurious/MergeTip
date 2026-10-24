@@ -8,6 +8,6 @@ expression: "rendered.join(\"\\n\\n\")"
 
 ⏳ @maintainer will tip @reviewer **2,100 sats** when this PR is merged
 
-🔌 @maintainer, connect your wallet to send this **2,100 sats** tip to @reviewer → [Connect wallet](https://mergetip.dev/settings/wallet) (held for 24 h)
+🔌 @maintainer, connect your wallet to send this **2,100 sats** tip to `reviewer` → [Connect wallet](https://mergetip.dev/settings/wallet) (held for 24 h)
 
 🔐 @maintainer, this **80,000 sats** tip to @reviewer is above your 50,000 sats confirmation limit. Confirm within 1 hour → [Confirm tip](https://mergetip.dev/confirm/0b6f)
