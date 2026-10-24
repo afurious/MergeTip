@@ -7,7 +7,7 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 - [x] 1.1 Tooling: `check-backend`, `sqlx-prepare`, `migrate-new` targets
 - [x] 1.2 `core` domain types and clock
 - [x] 1.3 `crypto` envelope encryption
-- [ ] 1.4 Data model RFC
+- [x] 1.4 Data model RFC
 - [ ] 1.5 Initial schema migration
 - [ ] 1.6 `store` repositories and transitions
 - [ ] 1.7 Postgres job queue
