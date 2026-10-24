@@ -177,6 +177,9 @@ fn ignored_contexts() {
 ~~~
 Use `/tip @inline 1` like this
 <!-- /tip @hidden 1 -->
+
+    /tip @indented 1
+
 /tip @real 7";
     let results = parse_comment(body);
     assert_eq!(results.len(), 1, "{results:?}");
