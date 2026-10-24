@@ -258,3 +258,57 @@ async fn retry_delay_is_measured_on_the_database_clock(pool: PgPool) -> sqlx::Re
     assert!((3590.0..=3600.0).contains(&wait), "run_at is {wait}s away");
     Ok(())
 }
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn heartbeat_keeps_a_long_job_leased(pool: PgPool) -> sqlx::Result<()> {
+    enqueue(&pool, NewJob::new("pay_tip", json!({}))).await;
+    let ks = kinds(&["pay_tip"]);
+    let job = jobs::claim(&pool, &ks, "slow/1", LEASE)
+        .await
+        .unwrap()
+        .unwrap();
+
+    // The job has been running longer than its lease...
+    sqlx::query!(
+        "UPDATE jobs SET locked_at = now() - interval '10 minutes' WHERE id = $1",
+        job.id
+    )
+    .execute(&pool)
+    .await?;
+    // ...but its worker is alive and renews the lease.
+    jobs::heartbeat(&pool, &job).await.unwrap();
+
+    assert!(
+        jobs::claim(&pool, &ks, "other/1", LEASE)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn heartbeat_reports_a_lost_lease(pool: PgPool) -> sqlx::Result<()> {
+    enqueue(&pool, NewJob::new("pay_tip", json!({}))).await;
+    let ks = kinds(&["pay_tip"]);
+    let stale = jobs::claim(&pool, &ks, "slow/1", LEASE)
+        .await
+        .unwrap()
+        .unwrap();
+    sqlx::query!(
+        "UPDATE jobs SET locked_at = now() - interval '10 minutes' WHERE id = $1",
+        stale.id
+    )
+    .execute(&pool)
+    .await?;
+    jobs::claim(&pool, &ks, "other/1", LEASE)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(matches!(
+        jobs::heartbeat(&pool, &stale).await,
+        Err(StoreError::Conflict)
+    ));
+    Ok(())
+}

@@ -23,7 +23,8 @@ use tracing::Instrument;
 pub struct RunnerConfig {
     /// Jobs run concurrently by this process.
     pub concurrency: usize,
-    /// How long a claim is exclusive; a job still locked after this is presumed abandoned.
+    /// How long a claim is exclusive without renewal. Running jobs renew it every `lease / 3`,
+    /// so only a job whose worker stopped renewing (crashed, partitioned) is reclaimed.
     pub lease: Duration,
     pub poll_interval: Duration,
     pub drain_timeout: Duration,
@@ -272,13 +273,12 @@ impl Runner {
             // A separate task, so a panicking handler fails its job instead of the slot.
             let ctx = self.ctx.clone();
             let task_job = job.clone();
-            let result = tokio::spawn(
+            let handler_task = tokio::spawn(
                 async move { handler.handle(&ctx, &task_job).await }.in_current_span(),
-            )
-            .await
-            .unwrap_or_else(|join_err| {
-                Err(JobError::retryable(format!("handler panicked: {join_err}")))
-            });
+            );
+            let Some(result) = self.supervise(&job, handler_task).await else {
+                return;
+            };
 
             match result {
                 Ok(JobOutcome::Done) => {
@@ -304,6 +304,41 @@ impl Runner {
         }
         .instrument(span)
         .await;
+    }
+
+    /// Waits for the handler while renewing the job's lease, so a run longer than `lease` is
+    /// not mistaken for a dead worker and run a second time elsewhere.
+    ///
+    /// Returns `None` if the lease was lost anyway (e.g. the database was unreachable for longer
+    /// than the lease). The handler is then aborted and nothing is recorded: the job belongs to
+    /// whichever worker reclaimed it.
+    async fn supervise(
+        &self,
+        job: &Job,
+        mut handler_task: tokio::task::JoinHandle<Result<JobOutcome, JobError>>,
+    ) -> Option<Result<JobOutcome, JobError>> {
+        let period = (self.config.lease / 3).max(Duration::from_millis(10));
+        let mut renew = tokio::time::interval_at(tokio::time::Instant::now() + period, period);
+        renew.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            tokio::select! {
+                joined = &mut handler_task => {
+                    return Some(joined.unwrap_or_else(|join_err| {
+                        Err(JobError::retryable(format!("handler panicked: {join_err}")))
+                    }));
+                }
+                _ = renew.tick() => match jobs::heartbeat(&self.ctx.pool, job).await {
+                    Ok(()) => {}
+                    Err(StoreError::Conflict) => {
+                        tracing::error!("lease lost while the job was running; abandoning it");
+                        handler_task.abort();
+                        return None;
+                    }
+                    // Transient: try again next tick; the lease has slack for a missed renewal.
+                    Err(err) => tracing::warn!(error = %err, "lease renewal failed"),
+                },
+            }
+        }
     }
 
     fn backoff(&self, attempt: i32) -> Duration {

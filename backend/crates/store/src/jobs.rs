@@ -154,6 +154,20 @@ pub async fn claim(
     Ok(job)
 }
 
+/// Extends the lease of a job that is still running. Fails with [`StoreError::Conflict`] if the
+/// lease was already lost (expired and reclaimed), in which case the caller must stop working on
+/// the job: another worker owns it now.
+pub async fn heartbeat(exec: impl PgExecutor<'_>, job: &Job) -> StoreResult<()> {
+    let result = sqlx::query!(
+        "UPDATE jobs SET locked_at = now() WHERE id = $1 AND locked_by = $2",
+        job.id,
+        job.lease,
+    )
+    .execute(exec)
+    .await?;
+    lease_held(result.rows_affected())
+}
+
 /// Finished successfully: the row is deleted.
 pub async fn complete(exec: impl PgExecutor<'_>, job: &Job) -> StoreResult<()> {
     let result = sqlx::query!(

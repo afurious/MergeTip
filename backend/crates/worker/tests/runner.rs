@@ -302,3 +302,32 @@ async fn retry_delay_ignores_a_skewed_worker_clock(pool: PgPool) -> sqlx::Result
     handle.await.unwrap();
     Ok(())
 }
+
+/// A job that outlives its lease is still run exactly once, because the runner renews the lease.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn long_job_is_not_run_twice(pool: PgPool) -> sqlx::Result<()> {
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let handler = Recorder {
+        delay: Duration::from_millis(2_500),
+        ..Recorder::new(tx)
+    };
+    let config = RunnerConfig {
+        lease: Duration::from_secs(1),
+        ..fast_config()
+    };
+    let (shutdown, handle) = start_with(&pool, handler, config);
+
+    enqueue(&pool, NewJob::new("record", json!({ "long": true }))).await;
+    assert_eq!(recv(&mut rx).await, json!({ "long": true }));
+    assert!(
+        tokio::time::timeout(Duration::from_secs(3), rx.recv())
+            .await
+            .is_err(),
+        "the job ran a second time"
+    );
+    assert_eq!(job_rows(&pool).await, (0, 0));
+
+    shutdown.cancel();
+    handle.await.unwrap();
+    Ok(())
+}
