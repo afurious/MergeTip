@@ -28,7 +28,7 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 - [x] 2.7 Bot replies
 - [x] 2.8 Stub payer
 - [x] 2.9 End-to-end harness
-- [ ] 2.10 Dev App helper
+- [x] 2.10 Dev App helper
 - [ ] Handover
 
 ## M3: Auth and payments

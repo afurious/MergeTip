@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 *.pem
+.secrets/
 
 # rust
 backend/target/

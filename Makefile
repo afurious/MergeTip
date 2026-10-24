@@ -5,7 +5,7 @@ FRONTEND := frontend
 
 # Load local settings (DATABASE_URL etc.) when present; the file is git-ignored.
 -include .env
-export DATABASE_URL
+export DATABASE_URL SMEE_URL
 
 .PHONY: help bootstrap up down dev dev-api dev-worker dev-web dev-app smee migrate migrate-new \
         sqlx-prepare openapi fmt lint test check check-backend clean
@@ -39,8 +39,8 @@ dev-worker:
 dev-web:
 	cd $(FRONTEND) && pnpm dev
 
-dev-app: ## Create a personal GitHub App from deploy/manifests/dev.json
-	@echo "TODO(P0-08): run the GitHub App manifest flow and write keys to .env"
+dev-app: ## Create a personal GitHub App from deploy/manifests/dev.json (needs SMEE_URL)
+	cd $(BACKEND) && cargo run --quiet -p dev-app --
 
 smee: ## Forward GitHub webhooks to the local api
 	npx smee-client --url $$SMEE_URL --target http://localhost:8080/v1/webhooks/github
