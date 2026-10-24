@@ -73,6 +73,9 @@ impl Engine {
             },
         )
         .await?;
+        // The limit checks below count this sender's tips and then insert more; the row lock
+        // makes concurrent comments from one sender take turns, so none passes on a stale count.
+        users::lock(&mut tx, sender.id).await?;
 
         let context = CommentContext {
             github_installation,

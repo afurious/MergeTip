@@ -600,3 +600,34 @@ async fn rejected_tips_count_toward_the_hourly_limit(pool: PgPool) -> sqlx::Resu
     );
     Ok(())
 }
+
+/// Two comments from one sender processed at the same moment must not both pass the hourly
+/// limit on a stale count.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn concurrent_comments_cannot_race_the_hourly_limit(pool: PgPool) -> sqlx::Result<()> {
+    let mut h = Harness::new(pool, false); // tips stop at awaiting_sender, still counted
+    for i in 0..6 {
+        let body: String = (0..3).map(|j| format!("/tip @early{i}x{j} 1\n")).collect();
+        h.comment(5000 + i, (10, "maintainer"), &body, 42).await;
+    }
+    assert_eq!(h.tips().await.len(), 18);
+
+    h.hold_jobs = true;
+    for i in 0..2 {
+        let body: String = (0..5).map(|j| format!("/tip @late{i}x{j} 1\n")).collect();
+        h.comment(6000 + i, (10, "maintainer"), &body, 42).await;
+    }
+    let deliveries = ["delivery-7", "delivery-8"];
+    let (a, b) = tokio::join!(
+        h.engine.process_event(deliveries[0]),
+        h.engine.process_event(deliveries[1])
+    );
+    a.unwrap();
+    b.unwrap();
+
+    let tips = h.tips().await;
+    let accepted = tips.iter().filter(|t| t.1 != "rejected").count();
+    assert_eq!(tips.len(), 28);
+    assert_eq!(accepted, 20, "{tips:?}");
+    Ok(())
+}
