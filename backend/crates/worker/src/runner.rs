@@ -60,8 +60,8 @@ impl fmt::Debug for JobContext {
 #[derive(Debug, Clone, PartialEq)]
 pub enum JobOutcome {
     Done,
-    /// Run this same job again at the given time (recurring jobs).
-    Reschedule(time::OffsetDateTime),
+    /// Run this same job again after the given delay (recurring jobs).
+    Reschedule(Duration),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -285,15 +285,14 @@ impl Runner {
                     tracing::debug!("job done");
                     self.finish(jobs::complete(&self.ctx.pool, &job)).await;
                 }
-                Ok(JobOutcome::Reschedule(at)) => {
-                    self.finish(jobs::reschedule(&self.ctx.pool, &job, at))
+                Ok(JobOutcome::Reschedule(delay)) => {
+                    self.finish(jobs::reschedule(&self.ctx.pool, &job, delay))
                         .await;
                 }
                 Err(JobError::Retryable { reason, after }) if !job.is_last_attempt() => {
                     let delay = after.unwrap_or_else(|| self.backoff(job.attempts));
                     tracing::warn!(error = %reason, retry_in = ?delay, "job failed; will retry");
-                    let run_at = self.ctx.clock.now() + delay;
-                    self.finish(jobs::retry(&self.ctx.pool, &job, &reason, run_at))
+                    self.finish(jobs::retry(&self.ctx.pool, &job, &reason, delay))
                         .await;
                 }
                 Err(JobError::Retryable { reason, .. } | JobError::Permanent { reason }) => {

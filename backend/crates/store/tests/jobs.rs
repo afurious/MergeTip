@@ -156,7 +156,7 @@ async fn retry_reschedules_and_dead_jobs_are_never_claimed(pool: PgPool) -> sqlx
         .unwrap()
         .unwrap();
     assert!(!first.is_last_attempt());
-    jobs::retry(&pool, &first, "relay timeout", OffsetDateTime::now_utc())
+    jobs::retry(&pool, &first, "relay timeout", Duration::ZERO)
         .await
         .unwrap();
 
@@ -196,9 +196,7 @@ async fn reschedule_keeps_one_row_with_a_fresh_budget(pool: PgPool) -> sqlx::Res
         .unwrap()
         .unwrap();
 
-    jobs::reschedule(&pool, &job, OffsetDateTime::now_utc())
-        .await
-        .unwrap();
+    jobs::reschedule(&pool, &job, Duration::ZERO).await.unwrap();
 
     let again = jobs::claim(&pool, &kinds(&["expire_tips"]), "w/2", LEASE)
         .await
@@ -230,5 +228,33 @@ async fn enqueue_notifies_listeners_on_commit_only(pool: PgPool) -> sqlx::Result
         .await
         .expect("notification arrives")?;
     assert_eq!(notification.payload(), "verify_tip");
+    Ok(())
+}
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn retry_delay_is_measured_on_the_database_clock(pool: PgPool) -> sqlx::Result<()> {
+    enqueue(&pool, NewJob::new("pay_tip", json!({}))).await;
+    let ks = kinds(&["pay_tip"]);
+    let job = jobs::claim(&pool, &ks, "w/1", LEASE)
+        .await
+        .unwrap()
+        .unwrap();
+
+    jobs::retry(&pool, &job, "rate limited", Duration::from_secs(3600))
+        .await
+        .unwrap();
+
+    assert!(
+        jobs::claim(&pool, &ks, "w/2", LEASE)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let wait = sqlx::query_scalar!(
+        r#"SELECT extract(epoch FROM run_at - now())::float8 AS "secs!" FROM jobs"#
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!((3590.0..=3600.0).contains(&wait), "run_at is {wait}s away");
     Ok(())
 }

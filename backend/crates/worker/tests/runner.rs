@@ -7,7 +7,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use mergetip_core::SystemClock;
+use mergetip_core::{FixedClock, SystemClock};
 use mergetip_store::jobs::{self, Job, NewJob};
 use mergetip_worker::{JobContext, JobError, JobHandler, JobOutcome, Runner, RunnerConfig};
 use serde_json::json;
@@ -255,4 +255,50 @@ where
     })
     .await
     .expect("condition met in time");
+}
+
+/// A worker whose clock is wrong (here: years behind the database) must still wait the full
+/// retry delay, because retry times come from the database clock.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn retry_delay_ignores_a_skewed_worker_clock(pool: PgPool) -> sqlx::Result<()> {
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let handler = Recorder {
+        fail_first: 1,
+        error: || JobError::retry_after("rate limited", Duration::from_secs(3600)),
+        ..Recorder::new(tx)
+    };
+    let skewed = Arc::new(FixedClock::new(
+        time::macros::datetime!(2000-01-01 0:00 UTC),
+    ));
+    let shutdown = CancellationToken::new();
+    let runner = Runner::new(pool.clone(), skewed, fast_config())
+        .unwrap()
+        .register(handler);
+    let handle = tokio::spawn(runner.run(shutdown.clone()));
+
+    enqueue(&pool, NewJob::new("record", json!({}))).await;
+    wait_until(|| async {
+        sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM jobs WHERE last_error IS NOT NULL"#)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+            == 1
+    })
+    .await;
+    assert!(
+        tokio::time::timeout(Duration::from_millis(500), rx.recv())
+            .await
+            .is_err(),
+        "the retry ran early"
+    );
+    let wait = sqlx::query_scalar!(
+        r#"SELECT extract(epoch FROM run_at - now())::float8 AS "secs!" FROM jobs"#
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(wait > 3500.0, "run_at is only {wait}s away");
+
+    shutdown.cancel();
+    handle.await.unwrap();
+    Ok(())
 }

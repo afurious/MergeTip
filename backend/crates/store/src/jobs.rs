@@ -166,21 +166,25 @@ pub async fn complete(exec: impl PgExecutor<'_>, job: &Job) -> StoreResult<()> {
     lease_held(result.rows_affected())
 }
 
-/// Failed but worth retrying at `run_at`.
+/// Failed but worth retrying after `delay`.
+///
+/// The retry time is computed by Postgres, the same clock [`claim`] compares against, so clock
+/// skew between a worker and the database can't make a retry fire early or stall.
 pub async fn retry(
     exec: impl PgExecutor<'_>,
     job: &Job,
     error: &str,
-    run_at: OffsetDateTime,
+    delay: Duration,
 ) -> StoreResult<()> {
     let result = sqlx::query!(
         r#"
-        UPDATE jobs SET run_at = $3, last_error = $4, locked_at = NULL, locked_by = NULL
+        UPDATE jobs SET run_at = now() + make_interval(secs => $3), last_error = $4,
+                        locked_at = NULL, locked_by = NULL
         WHERE id = $1 AND locked_by = $2
         "#,
         job.id,
         job.lease,
-        run_at,
+        delay.as_secs_f64(),
         error,
     )
     .execute(exec)
@@ -208,22 +212,19 @@ pub async fn fail_permanently(
     lease_held(result.rows_affected())
 }
 
-/// Runs the same job again at `run_at` with a fresh attempt budget. Recurring jobs use this
-/// instead of enqueueing a successor, which their own dedupe key would otherwise drop.
-pub async fn reschedule(
-    exec: impl PgExecutor<'_>,
-    job: &Job,
-    run_at: OffsetDateTime,
-) -> StoreResult<()> {
+/// Runs the same job again after `delay` (database clock) with a fresh attempt budget.
+/// Recurring jobs use this instead of enqueueing a successor, which their own dedupe key would
+/// otherwise drop.
+pub async fn reschedule(exec: impl PgExecutor<'_>, job: &Job, delay: Duration) -> StoreResult<()> {
     let result = sqlx::query!(
         r#"
-        UPDATE jobs SET run_at = $3, attempts = 0, last_error = NULL,
-                        locked_at = NULL, locked_by = NULL
+        UPDATE jobs SET run_at = now() + make_interval(secs => $3), attempts = 0,
+                        last_error = NULL, locked_at = NULL, locked_by = NULL
         WHERE id = $1 AND locked_by = $2
         "#,
         job.id,
         job.lease,
-        run_at,
+        delay.as_secs_f64(),
     )
     .execute(exec)
     .await?;
