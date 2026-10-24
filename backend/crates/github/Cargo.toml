@@ -21,6 +21,11 @@ time = { workspace = true, features = ["serde-well-known"] }
 tracing.workspace = true
 
 [dev-dependencies]
+insta.workspace = true
 tokio.workspace = true
 wiremock.workspace = true
 time = { workspace = true, features = ["macros", "serde-well-known"] }
+
+[features]
+# In-memory GitHubApi for other crates' tests.
+testing = ["time/macros"]

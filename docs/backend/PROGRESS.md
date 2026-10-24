@@ -24,7 +24,7 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 - [x] 2.3 `github` client
 - [ ] 2.4 `engine` crate and event processing
 - [ ] 2.5 Tip creation
-- [ ] 2.6 Verifier and decision
+- [x] 2.6 Verifier and decision
 - [ ] 2.7 Bot replies
 - [ ] 2.8 Stub payer
 - [ ] 2.9 End-to-end harness

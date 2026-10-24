@@ -2117,6 +2117,7 @@ name = "mergetip-github"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "insta",
  "mergetip-core",
  "octocrab",
  "serde",
