@@ -48,6 +48,7 @@ dependencies = [
  "cipher 0.5.2",
  "cpubits",
  "cpufeatures 0.3.1",
+ "zeroize",
 ]
 
 [[package]]
@@ -62,6 +63,7 @@ dependencies = [
  "ctr",
  "ctutils",
  "ghash",
+ "zeroize",
 ]
 
 [[package]]
@@ -1219,6 +1221,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2eecf2d5dc9b66b732b97707a0210906b1d30523eb773193ab777c0c84b3e8d5"
 dependencies = [
  "polyval",
+ "zeroize",
 ]
 
 [[package]]
@@ -1960,7 +1963,13 @@ name = "mergetip-crypto"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
+ "base64 0.22.1",
+ "getrandom 0.4.3",
+ "hex",
+ "hkdf",
  "hmac 0.13.0",
+ "serde",
+ "serde_json",
  "sha2 0.11.1",
  "thiserror 2.0.21",
  "zeroize",
@@ -2475,6 +2484,7 @@ dependencies = [
  "cpubits",
  "cpufeatures 0.3.1",
  "universal-hash 0.6.1",
+ "zeroize",
 ]
 
 [[package]]
