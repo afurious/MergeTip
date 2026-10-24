@@ -12,7 +12,7 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 - [x] 1.6 `store` repositories and transitions
 - [x] 1.7 Postgres job queue
 - [x] 1.8 `worker` runtime
-- [ ] 1.9 `api` router and error model
+- [x] 1.9 `api` router and error model
 - [ ] 1.10 OpenAPI pipeline
 - [ ] 1.11 Layering ADR and backend README
 - [ ] Handover

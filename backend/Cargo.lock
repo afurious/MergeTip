@@ -1938,13 +1938,16 @@ dependencies = [
  "mergetip-core",
  "mergetip-crypto",
  "mergetip-github",
+ "mergetip-runtime",
  "mergetip-store",
  "serde",
  "serde_json",
+ "thiserror 2.0.21",
  "tokio",
+ "tokio-util",
+ "tower",
  "tower-http 0.7.1",
  "tracing",
- "tracing-subscriber",
  "utoipa",
 ]
 
@@ -3931,9 +3934,11 @@ dependencies = [
  "http-body-util",
  "percent-encoding",
  "pin-project-lite",
+ "tokio",
  "tower-layer",
  "tower-service",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
