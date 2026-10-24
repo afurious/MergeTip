@@ -20,7 +20,7 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 ## M2: GitHub App core
 
 - [x] 2.1 Parser
-- [ ] 2.2 Webhook endpoint
+- [x] 2.2 Webhook endpoint
 - [ ] 2.3 `github` client
 - [ ] 2.4 `engine` crate and event processing
 - [ ] 2.5 Tip creation

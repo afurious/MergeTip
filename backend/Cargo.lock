@@ -2038,13 +2038,16 @@ dependencies = [
  "axum",
  "clap",
  "dotenvy",
+ "hex",
  "mergetip-core",
  "mergetip-crypto",
+ "mergetip-engine",
  "mergetip-github",
  "mergetip-runtime",
  "mergetip-store",
  "serde",
  "serde_json",
+ "sqlx",
  "thiserror 2.0.21",
  "tokio",
  "tokio-util",
@@ -2079,6 +2082,18 @@ dependencies = [
  "sha2 0.11.1",
  "thiserror 2.0.21",
  "zeroize",
+]
+
+[[package]]
+name = "mergetip-engine"
+version = "0.1.0"
+dependencies = [
+ "mergetip-core",
+ "mergetip-store",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

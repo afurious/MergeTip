@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT event, action, payload FROM github_events",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "github_events",
+            "name": "event"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "action",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "github_events",
+            "name": "action"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "payload",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "github_events",
+            "name": "payload"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "89be0cbbed8c3651177fe33d66272cb7728276212d3b5910915b831c5103bd3f"
+}

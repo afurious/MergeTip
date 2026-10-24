@@ -52,6 +52,80 @@
           }
         }
       }
+    },
+    "/v1/webhooks/github": {
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Receive a GitHub App webhook delivery.",
+        "operationId": "receive_github_webhook",
+        "parameters": [
+          {
+            "name": "X-Hub-Signature-256",
+            "in": "header",
+            "description": "`sha256=` HMAC of the raw body",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-GitHub-Event",
+            "in": "header",
+            "description": "Event name, e.g. `issue_comment`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-GitHub-Delivery",
+            "in": "header",
+            "description": "Unique delivery ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Raw event payload",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Stored for processing (or already stored)"
+          },
+          "400": {
+            "description": "A required header is missing or the body is not JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signature missing or wrong",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -106,6 +180,10 @@
     {
       "name": "meta",
       "description": "Service health"
+    },
+    {
+      "name": "webhooks",
+      "description": "Signed deliveries from external services"
     }
   ]
 }

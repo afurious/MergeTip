@@ -22,6 +22,7 @@ fn app() -> Router {
         ),
         ("DATABASE_URL", "postgres://unused/db"),
         ("PUBLIC_BASE_URL", WEB),
+        ("GITHUB_WEBHOOK_SECRET", "test-secret"),
     ]);
     let config = Arc::new(ApiConfig::from_env(&env).unwrap());
     // These routes never touch the database; a lazy pool never connects.

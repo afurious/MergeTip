@@ -13,6 +13,8 @@ pub struct ApiConfig {
     pub web_origin: HeaderValue,
     pub database_url: Redacted<String>,
     pub keyring: Arc<Keyring>,
+    /// Shared secret GitHub signs webhook deliveries with (`X-Hub-Signature-256`).
+    pub github_webhook_secret: Redacted<String>,
 }
 
 impl ApiConfig {
@@ -34,6 +36,7 @@ impl ApiConfig {
             web_origin: parse_origin("PUBLIC_BASE_URL", &env.required("PUBLIC_BASE_URL")?)?,
             database_url: Redacted::new(env.required("DATABASE_URL")?),
             keyring: Arc::new(keyring),
+            github_webhook_secret: Redacted::new(env.required("GITHUB_WEBHOOK_SECRET")?),
         })
     }
 
@@ -77,6 +80,7 @@ mod tests {
             ("MASTER_KEY", KEY),
             ("DATABASE_URL", "postgres://secret@db/mergetip"),
             ("PUBLIC_BASE_URL", base_url),
+            ("GITHUB_WEBHOOK_SECRET", "hook-secret"),
         ])
     }
 
@@ -86,6 +90,7 @@ mod tests {
         assert_eq!(config.addr, SocketAddr::from(([0, 0, 0, 0], 8080)));
         assert_eq!(config.web_base_url(), "http://localhost:5173");
         assert!(!format!("{config:?}").contains("secret@db"));
+        assert!(!format!("{config:?}").contains("hook-secret"));
     }
 
     #[test]
