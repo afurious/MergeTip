@@ -33,7 +33,18 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 
 ## M3: Auth and payments
 
-Not started.
+- [x] Payments RFC
+- [ ] 3.1 Sessions and payment attempts schema
+- [ ] 3.2 GitHub OAuth sign-in
+- [ ] 3.3 Auth extractors, sessions and `GET /me`
+- [ ] 3.4 LNURL resolver and invoice validation
+- [ ] 3.5 NWC client
+- [ ] 3.6 Wallet, address and settings endpoints
+- [ ] 3.7 Real `pay_tip`
+- [ ] 3.8 Reconciliation
+- [ ] 3.9 Devtools mocks
+- [ ] 3.10 Receipts and E2E journey
+- [ ] Handover
 
 ## M4: Edge flows and notifications
 
