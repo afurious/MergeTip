@@ -12,8 +12,20 @@ workspace = true
 
 [dependencies]
 mergetip-core.workspace = true
+mergetip-crypto.workspace = true
+mergetip-github.workspace = true
+mergetip-parser.workspace = true
 mergetip-store.workspace = true
+hex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
+time.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+mergetip-github = { workspace = true, features = ["testing"] }
+time = { workspace = true, features = ["macros"] }
+tokio.workspace = true
