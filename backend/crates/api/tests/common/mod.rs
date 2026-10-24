@@ -9,6 +9,7 @@ use mergetip_api::{ApiConfig, AppState, Services, router};
 use mergetip_core::{Clock, SystemClock};
 use mergetip_crypto::Redacted;
 use mergetip_github::oauth::OAuthClient;
+use mergetip_payer::{LnurlClient, Network, ReceiverEndpoint, WalletConnector, nwc::NwcConnector};
 use sqlx::PgPool;
 
 pub const WEB: &str = "http://localhost:5173";
@@ -27,10 +28,28 @@ pub fn env(github_base: &str) -> HashMap<&'static str, String> {
         ("GITHUB_CLIENT_SECRET", "client-secret".to_owned()),
         ("GITHUB_OAUTH_URL", github_base.to_owned()),
         ("GITHUB_API_URL", github_base.to_owned()),
+        ("LIGHTNING_NETWORK", "regtest".to_owned()),
     ])
 }
 
 pub fn state(pool: PgPool, github_base: &str, clock: Arc<dyn Clock>) -> AppState {
+    let receivers = LnurlClient::new(Network::Regtest, true, clock.clone()).unwrap();
+    state_with(
+        pool,
+        github_base,
+        clock,
+        Arc::new(NwcConnector),
+        Arc::new(receivers),
+    )
+}
+
+pub fn state_with(
+    pool: PgPool,
+    github_base: &str,
+    clock: Arc<dyn Clock>,
+    wallets: Arc<dyn WalletConnector>,
+    receivers: Arc<dyn ReceiverEndpoint>,
+) -> AppState {
     let env = env(github_base);
     let env: HashMap<&str, &str> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
     let config = Arc::new(ApiConfig::from_env(&env).unwrap());
@@ -47,6 +66,8 @@ pub fn state(pool: PgPool, github_base: &str, clock: Arc<dyn Clock>) -> AppState
         clock,
         Services {
             oauth: Arc::new(oauth),
+            wallets,
+            receivers,
         },
     )
 }

@@ -3,6 +3,7 @@ use std::{fmt, sync::Arc};
 use mergetip_core::Clock;
 use mergetip_crypto::Keyring;
 use mergetip_github::oauth::GitHubOAuth;
+use mergetip_payer::{ReceiverEndpoint, WalletConnector};
 use mergetip_store::PgPool;
 
 use crate::ApiConfig;
@@ -21,6 +22,10 @@ struct Inner {
 /// External integrations, behind traits so tests can substitute them.
 pub struct Services {
     pub oauth: Arc<dyn GitHubOAuth>,
+    /// Opens a sender's wallet to check it when they connect it.
+    pub wallets: Arc<dyn WalletConnector>,
+    /// Resolves Lightning addresses (LNURL-pay).
+    pub receivers: Arc<dyn ReceiverEndpoint>,
 }
 
 impl AppState {
@@ -40,6 +45,14 @@ impl AppState {
 
     pub fn oauth(&self) -> &dyn GitHubOAuth {
         self.0.services.oauth.as_ref()
+    }
+
+    pub fn wallets(&self) -> &dyn WalletConnector {
+        self.0.services.wallets.as_ref()
+    }
+
+    pub fn receivers(&self) -> &dyn ReceiverEndpoint {
+        self.0.services.receivers.as_ref()
     }
 
     pub fn pool(&self) -> &PgPool {

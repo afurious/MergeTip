@@ -26,6 +26,8 @@ pub struct ApiConfig {
     pub github_api_url: String,
     /// Browser-extension origins allowed to make cookie-authenticated writes, besides the web app.
     pub extension_origins: Vec<HeaderValue>,
+    /// The Lightning network invoices must be for (`bitcoin` in production).
+    pub lightning_network: mergetip_payer::Network,
 }
 
 impl ApiConfig {
@@ -73,6 +75,8 @@ impl ApiConfig {
                     })
                 })
                 .collect::<Result<_, _>>()?,
+            lightning_network: env
+                .parse_or("LIGHTNING_NETWORK", mergetip_payer::Network::Bitcoin)?,
         })
     }
 

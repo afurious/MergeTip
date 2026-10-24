@@ -223,6 +223,170 @@
         ]
       }
     },
+    "/v1/me/lightning-address": {
+      "put": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Link the receiver's Lightning address, after checking it resolves.",
+        "operationId": "set_lightning_address",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddressRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`lnurl_invalid` or `lnurl_unreachable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/me/settings": {
+      "patch": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Change limits and preferences. Omitted fields are unchanged.",
+        "operationId": "update_settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalid_setting`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/me/wallet": {
+      "put": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Connect (or replace) the sender's wallet.",
+        "operationId": "connect_wallet",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WalletRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`nwc_invalid_uri`, `nwc_unreachable` or `nwc_missing_pay_invoice`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Disconnect the sender's wallet.",
+        "operationId": "disconnect_wallet",
+        "responses": {
+          "204": {
+            "description": "Disconnected (or nothing was connected)"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/webhooks/github": {
       "post": {
         "tags": [
@@ -300,6 +464,18 @@
   },
   "components": {
     "schemas": {
+      "AddressRequest": {
+        "type": "object",
+        "required": [
+          "address"
+        ],
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "A Lightning address such as `alice@getalby.com`."
+          }
+        }
+      },
       "Caps": {
         "type": "object",
         "required": [
@@ -437,6 +613,60 @@
           },
           "wallet": {
             "$ref": "#/components/schemas/WalletStatus"
+          }
+        }
+      },
+      "SettingsRequest": {
+        "type": "object",
+        "properties": {
+          "confirm_otp_enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "confirm_threshold_sats": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "daily_max_sats": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "email_opt_out": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "per_tip_max_sats": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "WalletRequest": {
+        "type": "object",
+        "required": [
+          "nwc_uri"
+        ],
+        "properties": {
+          "nwc_uri": {
+            "type": "string",
+            "description": "`nostr+walletconnect://…`. Treated as a password: never stored in plain text, logged or\nreturned."
           }
         }
       },

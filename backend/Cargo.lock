@@ -1962,6 +1962,7 @@ name = "mergetip-api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "base64 0.22.1",
  "clap",
@@ -1971,8 +1972,10 @@ dependencies = [
  "mergetip-crypto",
  "mergetip-engine",
  "mergetip-github",
+ "mergetip-payer",
  "mergetip-runtime",
  "mergetip-store",
+ "nostr-sdk",
  "serde",
  "serde_json",
  "sqlx",
@@ -1983,7 +1986,9 @@ dependencies = [
  "tower",
  "tower-http 0.7.1",
  "tracing",
+ "tracing-subscriber",
  "utoipa",
+ "uuid",
  "wiremock",
 ]
 
@@ -2026,6 +2031,7 @@ dependencies = [
  "mergetip-crypto",
  "mergetip-engine",
  "mergetip-github",
+ "mergetip-payer",
  "mergetip-store",
  "mergetip-worker",
  "serde_json",

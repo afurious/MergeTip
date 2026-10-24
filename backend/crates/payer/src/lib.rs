@@ -110,6 +110,9 @@ pub trait SenderWallet: Send + Sync {
     ) -> Result<PaymentProof, nwc::PayError>;
 
     async fn lookup_invoice(&self, payment_hash: &str) -> Result<nwc::Lookup, nwc::PayError>;
+
+    /// Releases relay connections. Called when the wallet is no longer needed.
+    async fn close(&self) {}
 }
 
 /// Opens a [`SenderWallet`] from a decrypted NWC URI. Behind a trait so tests use a fake wallet.

@@ -216,11 +216,6 @@ impl NwcWallet {
         Response::from_event(&self.uri, &received, self.cipher)
             .map_err(|err| PayError::Protocol(err.to_string()))
     }
-
-    /// Closes the relay connections.
-    pub async fn close(&self) {
-        self.client.shutdown().await;
-    }
 }
 
 fn cipher_from(info: &Event) -> Nip47Ciphers {

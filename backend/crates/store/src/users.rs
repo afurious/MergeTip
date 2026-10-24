@@ -267,3 +267,56 @@ pub async fn set_email(
     .await?;
     Ok(())
 }
+
+/// Changes to a user's limits and preferences; `None` leaves a field unchanged.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SettingsUpdate {
+    pub per_tip_max: Option<Sats>,
+    pub daily_max: Option<Sats>,
+    pub confirm_threshold: Option<Sats>,
+    pub confirm_otp_enabled: Option<bool>,
+    pub email_opt_out: Option<bool>,
+}
+
+pub async fn update_settings(
+    exec: impl PgExecutor<'_>,
+    id: UserId,
+    update: &SettingsUpdate,
+) -> StoreResult<()> {
+    let sats = |v: Option<Sats>| v.map(i64::try_from).transpose().map_err(corrupt);
+    sqlx::query!(
+        r#"
+        UPDATE users SET
+            per_tip_max_sats = COALESCE($2, per_tip_max_sats),
+            daily_max_sats = COALESCE($3, daily_max_sats),
+            confirm_threshold_sats = COALESCE($4, confirm_threshold_sats),
+            confirm_otp_enabled = COALESCE($5, confirm_otp_enabled),
+            email_opt_out = COALESCE($6, email_opt_out)
+        WHERE id = $1
+        "#,
+        id.as_uuid(),
+        sats(update.per_tip_max)?,
+        sats(update.daily_max)?,
+        sats(update.confirm_threshold)?,
+        update.confirm_otp_enabled,
+        update.email_opt_out,
+    )
+    .execute(exec)
+    .await?;
+    Ok(())
+}
+
+pub async fn set_lightning_address(
+    exec: impl PgExecutor<'_>,
+    id: UserId,
+    address: Option<&str>,
+) -> StoreResult<()> {
+    sqlx::query!(
+        "UPDATE users SET lightning_address = $2 WHERE id = $1",
+        id.as_uuid(),
+        address,
+    )
+    .execute(exec)
+    .await?;
+    Ok(())
+}

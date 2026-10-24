@@ -14,6 +14,7 @@ use mergetip_api::{ApiConfig, AppState, Services, router};
 use mergetip_core::SystemClock;
 use mergetip_engine::{Engine, EngineSettings};
 use mergetip_github::{OctocrabGitHub, oauth::OAuthClient};
+use mergetip_payer::{LnurlClient, Network, nwc::NwcConnector};
 use mergetip_worker::{
     Runner, RunnerConfig,
     handlers::{PayTipStubHandler, PostReplyHandler, ProcessEventHandler, VerifyTipHandler},
@@ -63,8 +64,11 @@ impl System {
             &github.uri(),
         )
         .unwrap();
+        let receivers = LnurlClient::new(Network::Regtest, true, Arc::new(SystemClock)).unwrap();
         let services = Services {
             oauth: Arc::new(oauth),
+            wallets: Arc::new(NwcConnector),
+            receivers: Arc::new(receivers),
         };
         let api = router(AppState::new(
             pool.clone(),

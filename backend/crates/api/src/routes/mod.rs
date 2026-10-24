@@ -3,6 +3,7 @@
 pub(crate) mod auth;
 pub(crate) mod health;
 pub(crate) mod me;
+pub(crate) mod settings;
 pub(crate) mod webhooks;
 
 use std::time::Duration;
@@ -13,7 +14,7 @@ use axum::{
     http::{HeaderName, Method, StatusCode, header},
     middleware,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{get, patch, post, put},
 };
 use tower_http::{
     cors::CorsLayer,
@@ -52,6 +53,15 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/logout", post(auth::logout))
         .route("/auth/extension-token", post(auth::extension_token))
         .route("/me", get(me::get_me))
+        .route(
+            "/me/wallet",
+            put(settings::connect_wallet).delete(settings::disconnect_wallet),
+        )
+        .route(
+            "/me/lightning-address",
+            put(settings::set_lightning_address),
+        )
+        .route("/me/settings", patch(settings::update_settings))
         .route("/webhooks/github", post(webhooks::github));
 
     // Layers run outermost-last. CORS wraps every layer that can answer on its own (body limit,
