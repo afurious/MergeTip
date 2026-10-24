@@ -542,3 +542,44 @@ async fn the_last_try_fails_the_tip_instead_of_stranding_it(pool: PgPool) -> sql
     assert_eq!(w.state(tip).await, state("failed", Some("payment_failed")));
     Ok(())
 }
+
+/// The worker died after `pay_invoice` was sent but before it recorded anything: the attempt is
+/// still `pending` and its job comes back after the lease expires. The re-run must reconcile,
+/// and the tip must end up paid exactly once.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn a_worker_killed_mid_payment_never_pays_twice(pool: PgPool) -> sqlx::Result<()> {
+    let mut w = World::new(pool).await;
+    let address = w.address("reviewer");
+    let tip = w
+        .paying_tip("reviewer", Some(&address), behaviour::PAYS_SILENTLY_SATS)
+        .await;
+    w.engine.pay_tip(tip, false).await.unwrap();
+    // Rewind to the moment of the crash: the wallet has paid, the attempt is still pending and
+    // nothing has been scheduled yet.
+    sqlx::query!("UPDATE payment_attempts SET status = 'pending'")
+        .execute(&w.pool)
+        .await?;
+    sqlx::query!("DELETE FROM jobs").execute(&w.pool).await?;
+
+    // The reclaimed pay job runs again.
+    w.engine.pay_tip(tip, false).await.unwrap();
+    assert_eq!(w.wallet.paid_hashes().len(), 1, "not paid a second time");
+    let (tip_id, attempt_id) = w.reconcile_job().await;
+    assert_eq!(
+        w.engine
+            .reconcile_payment(tip_id, attempt_id)
+            .await
+            .unwrap(),
+        ReconcileOutcome::Done
+    );
+
+    assert_eq!(w.state(tip).await, state("paid", None));
+    assert_eq!(w.attempts(tip).await, ["succeeded"]);
+    let successes = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "n!" FROM payment_attempts WHERE status = 'succeeded'"#
+    )
+    .fetch_one(&w.pool)
+    .await?;
+    assert_eq!(successes, 1);
+    Ok(())
+}

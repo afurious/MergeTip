@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE payment_attempts SET status = 'pending'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "274ddf57b2d8f6681aa41359bbeb0e0cacb66e0c8258a717f72688c49940bd7c"
+}

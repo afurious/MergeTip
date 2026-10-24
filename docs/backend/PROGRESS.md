@@ -41,7 +41,7 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 - [x] 3.5 NWC client
 - [x] 3.6 Wallet, address and settings endpoints
 - [x] 3.7 Real `pay_tip`
-- [ ] 3.8 Reconciliation
+- [x] 3.8 Reconciliation
 - [ ] 3.9 Devtools mocks
 - [ ] 3.10 Receipts and E2E journey
 - [ ] Handover
