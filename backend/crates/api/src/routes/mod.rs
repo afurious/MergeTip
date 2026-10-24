@@ -1,6 +1,6 @@
 //! Route table and middleware stack.
 
-mod health;
+pub(crate) mod health;
 
 use std::time::Duration;
 

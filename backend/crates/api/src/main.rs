@@ -3,12 +3,38 @@
 use std::sync::Arc;
 
 use anyhow::Context;
-use mergetip_api::{ApiConfig, AppState, router};
+use clap::{Parser, Subcommand};
+use mergetip_api::{ApiConfig, AppState, openapi, router};
 use mergetip_core::SystemClock;
 use mergetip_runtime::{config::ProcessEnv, db, shutdown, telemetry};
 
+#[derive(Debug, Parser)]
+#[command(name = "mergetip-api", version, about)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Serve the HTTP API (the default).
+    Serve,
+    /// Print the OpenAPI document to stdout.
+    Openapi,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    match Cli::parse().command.unwrap_or(Command::Serve) {
+        Command::Openapi => {
+            print!("{}", openapi::json());
+            Ok(())
+        }
+        Command::Serve => serve().await,
+    }
+}
+
+async fn serve() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     let config = Arc::new(ApiConfig::from_env(&ProcessEnv).context("invalid configuration")?);
     telemetry::init(config.app_env);

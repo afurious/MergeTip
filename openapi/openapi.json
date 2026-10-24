@@ -2,17 +2,110 @@
   "openapi": "3.1.0",
   "info": {
     "title": "MergeTip API",
-    "version": "0.1.0",
-    "description": "Generated from the Rust backend with utoipa. Do not edit by hand once generation is wired up."
+    "description": "Generated from the Rust backend with utoipa (`make openapi`). Do not edit by hand.",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    },
+    "version": "0.1.0"
   },
   "paths": {
     "/healthz": {
       "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Liveness probe for load balancers.",
+        "description": "Deliberately touches no dependencies, so a database outage doesn't take every machine out of\nrotation at once.",
+        "operationId": "healthz",
+        "responses": {
+          "200": {
+            "description": "The process is up",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/health": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Service status and build version.",
         "operationId": "health",
         "responses": {
-          "200": { "description": "Service is up", "content": { "text/plain": { "schema": { "type": "string" } } } }
+          "200": {
+            "description": "The service is up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
         }
       }
     }
-  }
+  },
+  "components": {
+    "schemas": {
+      "ErrorBody": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable `snake_case` identifier, e.g. `nwc_invalid_uri`."
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "Health": {
+        "type": "object",
+        "required": [
+          "status",
+          "version"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Always `ok` when the process can serve requests."
+          },
+          "version": {
+            "type": "string",
+            "description": "The running build's version."
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "meta",
+      "description": "Service health"
+    }
+  ]
 }

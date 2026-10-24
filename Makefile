@@ -56,7 +56,7 @@ sqlx-prepare: ## Refresh backend/.sqlx offline query data (needs DATABASE_URL)
 	cd $(BACKEND) && cargo sqlx prepare --workspace -- --all-targets
 
 openapi: ## Regenerate openapi/openapi.json and the TS client
-	@echo "TODO: dump the utoipa spec from mergetip-api into openapi/openapi.json"
+	cd $(BACKEND) && cargo run --quiet -p mergetip-api -- openapi > ../openapi/openapi.json
 	cd $(FRONTEND) && pnpm gen:api
 
 fmt: ## Format all code

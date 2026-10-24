@@ -18,6 +18,7 @@ mergetip-crypto.workspace = true
 mergetip-runtime.workspace = true
 anyhow.workspace = true
 axum.workspace = true
+clap.workspace = true
 dotenvy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
