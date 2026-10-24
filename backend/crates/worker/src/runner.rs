@@ -1,0 +1,349 @@
+//! The job runner: a fixed number of slots, each claiming and running one job at a time.
+//!
+//! Slots wake on Postgres `NOTIFY` (enqueue sends one) and fall back to polling, so a missed
+//! notification costs at most one poll interval. On shutdown, slots stop claiming, in-flight jobs
+//! get `drain_timeout` to finish, and anything still running after that is abandoned; its lease
+//! expires and another worker picks it up.
+
+use std::{collections::HashMap, fmt, sync::Arc, time::Duration};
+
+use async_trait::async_trait;
+use mergetip_core::Clock;
+use mergetip_store::{
+    PgPool, StoreError,
+    jobs::{self, Job},
+};
+use sqlx::postgres::PgListener;
+use tokio::{sync::Notify, task::JoinSet};
+use tokio_util::sync::CancellationToken;
+use tracing::Instrument;
+
+#[derive(Debug, Clone)]
+pub struct RunnerConfig {
+    /// Jobs run concurrently by this process.
+    pub concurrency: usize,
+    /// How long a claim is exclusive; a job still locked after this is presumed abandoned.
+    pub lease: Duration,
+    pub poll_interval: Duration,
+    pub drain_timeout: Duration,
+    pub retry_base: Duration,
+    pub retry_cap: Duration,
+}
+
+impl Default for RunnerConfig {
+    fn default() -> Self {
+        Self {
+            concurrency: 8,
+            lease: Duration::from_secs(300),
+            poll_interval: Duration::from_secs(1),
+            drain_timeout: Duration::from_secs(30),
+            retry_base: Duration::from_secs(10),
+            retry_cap: Duration::from_secs(600),
+        }
+    }
+}
+
+/// Shared dependencies handed to every handler.
+#[derive(Clone)]
+pub struct JobContext {
+    pub pool: PgPool,
+    pub clock: Arc<dyn Clock>,
+}
+
+impl fmt::Debug for JobContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("JobContext").finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum JobOutcome {
+    Done,
+    /// Run this same job again at the given time (recurring jobs).
+    Reschedule(time::OffsetDateTime),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum JobError {
+    /// Transient: retried with backoff, or after `after` when the cause dictates (rate limits).
+    #[error("{reason}")]
+    Retryable {
+        reason: String,
+        after: Option<Duration>,
+    },
+    /// Retrying cannot help; the job is dead-lettered.
+    #[error("{reason}")]
+    Permanent { reason: String },
+}
+
+impl JobError {
+    pub fn retryable(reason: impl fmt::Display) -> Self {
+        Self::Retryable {
+            reason: reason.to_string(),
+            after: None,
+        }
+    }
+
+    pub fn retry_after(reason: impl fmt::Display, after: Duration) -> Self {
+        Self::Retryable {
+            reason: reason.to_string(),
+            after: Some(after),
+        }
+    }
+
+    pub fn permanent(reason: impl fmt::Display) -> Self {
+        Self::Permanent {
+            reason: reason.to_string(),
+        }
+    }
+}
+
+/// Database errors inside a handler are assumed transient (failover, pool exhaustion).
+impl From<StoreError> for JobError {
+    fn from(err: StoreError) -> Self {
+        Self::retryable(err)
+    }
+}
+
+#[async_trait]
+pub trait JobHandler: Send + Sync {
+    /// The `jobs.kind` value this handler runs.
+    fn kind(&self) -> &'static str;
+
+    async fn handle(&self, ctx: &JobContext, job: &Job) -> Result<JobOutcome, JobError>;
+}
+
+pub struct Runner {
+    ctx: JobContext,
+    config: RunnerConfig,
+    handlers: HashMap<&'static str, Arc<dyn JobHandler>>,
+    worker_id: String,
+}
+
+impl Runner {
+    pub fn new(pool: PgPool, clock: Arc<dyn Clock>, config: RunnerConfig) -> Self {
+        let suffix = getrandom::u32().unwrap_or_default();
+        Self {
+            ctx: JobContext { pool, clock },
+            config,
+            handlers: HashMap::new(),
+            worker_id: format!("worker-{}-{suffix:08x}", std::process::id()),
+        }
+    }
+
+    /// Adds a handler. Registering two handlers for one kind is a wiring bug, so it panics.
+    #[must_use]
+    pub fn register(mut self, handler: impl JobHandler + 'static) -> Self {
+        let kind = handler.kind();
+        let previous = self.handlers.insert(kind, Arc::new(handler));
+        assert!(
+            previous.is_none(),
+            "two handlers registered for job kind {kind:?}"
+        );
+        self
+    }
+
+    /// Runs until `shutdown` is cancelled, then drains in-flight jobs.
+    pub async fn run(self, shutdown: CancellationToken) {
+        let runner = Arc::new(self);
+        let wake = Arc::new(Notify::new());
+        let kinds: Arc<[String]> = runner.handlers.keys().map(|k| (*k).to_owned()).collect();
+        tracing::info!(
+            worker_id = %runner.worker_id,
+            concurrency = runner.config.concurrency,
+            kinds = ?kinds,
+            "job runner started"
+        );
+
+        let listener = tokio::spawn(listen(
+            runner.ctx.pool.clone(),
+            wake.clone(),
+            shutdown.clone(),
+        ));
+
+        let mut slots = JoinSet::new();
+        for slot in 0..runner.config.concurrency {
+            slots.spawn(
+                runner
+                    .clone()
+                    .slot(kinds.clone(), wake.clone(), shutdown.clone())
+                    .instrument(tracing::info_span!("slot", slot)),
+            );
+        }
+
+        shutdown.cancelled().await;
+        tracing::info!("draining in-flight jobs");
+        let drained = tokio::time::timeout(runner.config.drain_timeout, async {
+            while slots.join_next().await.is_some() {}
+        })
+        .await;
+        if drained.is_err() {
+            tracing::warn!(
+                remaining = slots.len(),
+                "drain timed out; abandoned jobs will be reclaimed after their lease expires"
+            );
+            slots.abort_all();
+        }
+        listener.abort();
+        tracing::info!("job runner stopped");
+    }
+
+    async fn slot(
+        self: Arc<Self>,
+        kinds: Arc<[String]>,
+        wake: Arc<Notify>,
+        shutdown: CancellationToken,
+    ) {
+        while !shutdown.is_cancelled() {
+            // Register for wake-ups before claiming, so an enqueue that lands between an empty
+            // claim and the wait is not missed.
+            let notified = wake.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+
+            let lease_token = format!("{}/{}", self.worker_id, lease_nonce());
+            match jobs::claim(&self.ctx.pool, &kinds, &lease_token, self.config.lease).await {
+                Ok(Some(job)) => self.execute(job).await,
+                Ok(None) => {
+                    tokio::select! {
+                        () = &mut notified => {}
+                        () = tokio::time::sleep(self.config.poll_interval) => {}
+                        () = shutdown.cancelled() => {}
+                    }
+                }
+                Err(err) => {
+                    tracing::error!(error = %err, "claiming a job failed");
+                    tokio::select! {
+                        () = tokio::time::sleep(self.config.poll_interval) => {}
+                        () = shutdown.cancelled() => {}
+                    }
+                }
+            }
+        }
+    }
+
+    async fn execute(&self, job: Job) {
+        let span = tracing::info_span!(
+            "job",
+            job_id = job.id,
+            kind = %job.kind,
+            attempt = job.attempts
+        );
+        async {
+            if job.is_exhausted() {
+                tracing::error!("job was abandoned on its final attempt; dead-lettering");
+                self.finish(jobs::fail_permanently(
+                    &self.ctx.pool,
+                    &job,
+                    "lease expired during the final attempt",
+                ))
+                .await;
+                return;
+            }
+
+            let Some(handler) = self.handlers.get(job.kind.as_str()).cloned() else {
+                // Unreachable while claims are filtered by registered kinds; fail loudly if not.
+                self.finish(jobs::fail_permanently(
+                    &self.ctx.pool,
+                    &job,
+                    "no handler registered",
+                ))
+                .await;
+                return;
+            };
+
+            // A separate task, so a panicking handler fails its job instead of the slot.
+            let ctx = self.ctx.clone();
+            let task_job = job.clone();
+            let result = tokio::spawn(
+                async move { handler.handle(&ctx, &task_job).await }.in_current_span(),
+            )
+            .await
+            .unwrap_or_else(|join_err| {
+                Err(JobError::retryable(format!("handler panicked: {join_err}")))
+            });
+
+            match result {
+                Ok(JobOutcome::Done) => {
+                    tracing::debug!("job done");
+                    self.finish(jobs::complete(&self.ctx.pool, &job)).await;
+                }
+                Ok(JobOutcome::Reschedule(at)) => {
+                    self.finish(jobs::reschedule(&self.ctx.pool, &job, at))
+                        .await;
+                }
+                Err(JobError::Retryable { reason, after }) if !job.is_last_attempt() => {
+                    let delay = after.unwrap_or_else(|| self.backoff(job.attempts));
+                    tracing::warn!(error = %reason, retry_in = ?delay, "job failed; will retry");
+                    let run_at = self.ctx.clock.now() + delay;
+                    self.finish(jobs::retry(&self.ctx.pool, &job, &reason, run_at))
+                        .await;
+                }
+                Err(JobError::Retryable { reason, .. } | JobError::Permanent { reason }) => {
+                    tracing::error!(error = %reason, "job failed permanently");
+                    self.finish(jobs::fail_permanently(&self.ctx.pool, &job, &reason))
+                        .await;
+                }
+            }
+        }
+        .instrument(span)
+        .await;
+    }
+
+    fn backoff(&self, attempt: i32) -> Duration {
+        let jitter = f64::from(getrandom::u32().unwrap_or(u32::MAX / 2)) / f64::from(u32::MAX);
+        jobs::backoff(
+            attempt,
+            self.config.retry_base,
+            self.config.retry_cap,
+            jitter,
+        )
+    }
+
+    async fn finish(&self, update: impl Future<Output = Result<(), StoreError>>) {
+        match update.await {
+            Ok(()) => {}
+            Err(StoreError::Conflict) => {
+                tracing::warn!("lease was lost before the job finished; another worker owns it");
+            }
+            Err(err) => tracing::error!(error = %err, "recording the job result failed"),
+        }
+    }
+}
+
+/// Wakes idle slots whenever a job is enqueued. `PgListener` reconnects on its own; errors are
+/// logged and polling covers the gap.
+async fn listen(pool: PgPool, wake: Arc<Notify>, shutdown: CancellationToken) {
+    let mut listener = loop {
+        match PgListener::connect_with(&pool).await {
+            Ok(mut listener) => match listener.listen(jobs::NOTIFY_CHANNEL).await {
+                Ok(()) => break listener,
+                Err(err) => tracing::warn!(error = %err, "LISTEN failed; polling only"),
+            },
+            Err(err) => tracing::warn!(error = %err, "listener connect failed; polling only"),
+        }
+        tokio::select! {
+            () = tokio::time::sleep(Duration::from_secs(5)) => {}
+            () = shutdown.cancelled() => return,
+        }
+    };
+    loop {
+        tokio::select! {
+            () = shutdown.cancelled() => return,
+            message = listener.recv() => match message {
+                Ok(_) => wake.notify_waiters(),
+                Err(err) => {
+                    tracing::warn!(error = %err, "job notification stream failed");
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            },
+        }
+    }
+}
+
+/// A per-claim nonce for the lease token; uniqueness, not secrecy, is what matters here.
+fn lease_nonce() -> String {
+    let high = getrandom::u64().unwrap_or_default();
+    let low = getrandom::u32().unwrap_or_default();
+    format!("{high:016x}{low:08x}")
+}

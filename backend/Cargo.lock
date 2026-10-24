@@ -2043,6 +2043,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mergetip-runtime"
+version = "0.1.0"
+dependencies = [
+ "mergetip-store",
+ "sqlx",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "mergetip-store"
 version = "0.1.0"
 dependencies = [
@@ -2064,7 +2077,9 @@ name = "mergetip-worker"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "dotenvy",
+ "getrandom 0.4.3",
  "mergetip-core",
  "mergetip-crypto",
  "mergetip-fiat",
@@ -2072,10 +2087,15 @@ dependencies = [
  "mergetip-notify",
  "mergetip-parser",
  "mergetip-payer",
+ "mergetip-runtime",
  "mergetip-store",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "time",
  "tokio",
+ "tokio-util",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

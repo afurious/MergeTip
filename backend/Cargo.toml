@@ -20,9 +20,11 @@ mergetip-fiat = { path = "crates/fiat" }
 mergetip-notify = { path = "crates/notify" }
 mergetip-store = { path = "crates/store" }
 mergetip-crypto = { path = "crates/crypto" }
+mergetip-runtime = { path = "crates/runtime" }
 
 # runtime / http
 tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
 axum = "0.8"
 tower-http = { version = "0.7", features = ["trace", "limit", "cors"] }
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
@@ -40,6 +42,7 @@ async-trait = "0.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 dotenvy = "0.15"
+clap = { version = "4", features = ["derive", "env"] }
 
 # database
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "macros", "migrate", "uuid", "time", "json"] }
