@@ -631,3 +631,22 @@ async fn concurrent_comments_cannot_race_the_hourly_limit(pool: PgPool) -> sqlx:
     assert_eq!(accepted, 20, "{tips:?}");
     Ok(())
 }
+
+/// A comment with thousands of commands still produces one short error reply.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn huge_comments_get_a_bounded_reply(pool: PgPool) -> sqlx::Result<()> {
+    let mut h = Harness::new(pool, true);
+    let body: String = (0..3_000).map(|i| format!("/tip @u{i} nope\n")).collect();
+    h.comment(7001, (10, "maintainer"), &body, 42).await;
+
+    assert!(h.tips().await.is_empty());
+    let posted = h.github.posted_bodies();
+    assert_eq!(posted.len(), 1);
+    assert_eq!(posted[0].matches("\n- ").count(), 6, "{}", posted[0]);
+    assert!(
+        posted[0].len() < 2_000,
+        "reply is {} bytes",
+        posted[0].len()
+    );
+    Ok(())
+}

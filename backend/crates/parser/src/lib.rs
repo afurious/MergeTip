@@ -99,9 +99,11 @@ impl ParseError {
     }
 }
 
-/// Extracts every `/tip` command from a comment body, in order.
+/// Extracts the `/tip` commands from a comment body, in order.
 ///
-/// Commands beyond [`MAX_COMMANDS_PER_COMMENT`] come back as [`ParseError::TooManyCommands`].
+/// After [`MAX_COMMANDS_PER_COMMENT`] commands, the next one comes back as a single
+/// [`ParseError::TooManyCommands`] and scanning stops, so the result (and the bot's error reply)
+/// stays small however long the comment is.
 pub fn parse_comment(body: &str) -> Vec<Result<TipCommand, CommandError>> {
     let masked = mask::mask(body);
     let mut results = Vec::new();
@@ -113,11 +115,13 @@ pub fn parse_comment(body: &str) -> Vec<Result<TipCommand, CommandError>> {
         // The mask is byte-aligned with the body, so the offset found in the masked line points
         // at the same `/tip` in the original. Parse the original, so code spans inside a note
         // are kept as written.
-        let text = line[start..].trim_end().to_owned();
-        let result = if results.len() >= MAX_COMMANDS_PER_COMMENT {
+        let command = line[start..].trim_end();
+        let text = quote_command(command);
+        let too_many = results.len() >= MAX_COMMANDS_PER_COMMENT;
+        let result = if too_many {
             Err(ParseError::TooManyCommands)
         } else {
-            parse_command(&text[4..])
+            parse_command(&command[4..])
         };
         results.push(
             result
@@ -134,8 +138,24 @@ pub fn parse_comment(body: &str) -> Vec<Result<TipCommand, CommandError>> {
                     note,
                 }),
         );
+        if too_many {
+            break;
+        }
     }
     results
+}
+
+/// Longest command text quoted back in an error, in characters.
+const MAX_QUOTED_COMMAND: usize = 100;
+
+fn quote_command(command: &str) -> String {
+    if command.chars().count() <= MAX_QUOTED_COMMAND {
+        command.to_owned()
+    } else {
+        let mut cut: String = command.chars().take(MAX_QUOTED_COMMAND).collect();
+        cut.push('…');
+        cut
+    }
 }
 
 /// Byte offset of the first `/tip` on the line that starts a command: at the start of the line

@@ -199,23 +199,29 @@ fn errors_carry_index_and_text() {
 }
 
 #[test]
-fn sixth_and_later_commands_are_refused() {
-    let body: String = (0..7)
+fn the_sixth_command_is_refused_and_scanning_stops() {
+    let body: String = (0..3_000)
         .map(|i| format!("/tip @user{i} {}\n", i + 1))
         .collect();
     let results = parse_comment(&body);
-    assert_eq!(results.len(), 7);
+    assert_eq!(results.len(), MAX_COMMANDS_PER_COMMENT + 1);
     assert!(
         results[..MAX_COMMANDS_PER_COMMENT]
             .iter()
             .all(Result::is_ok)
     );
-    for result in &results[MAX_COMMANDS_PER_COMMENT..] {
-        assert_eq!(
-            result.as_ref().unwrap_err().error,
-            ParseError::TooManyCommands
-        );
-    }
+    let last = results[MAX_COMMANDS_PER_COMMENT].as_ref().unwrap_err();
+    assert_eq!(last.error, ParseError::TooManyCommands);
+    assert_eq!(last.text, "/tip @user5 6");
+}
+
+#[test]
+fn quoted_command_text_is_bounded() {
+    let long_note = "x".repeat(10_000);
+    let results = parse_comment(&format!("/tip @a nope for {long_note}"));
+    let error = results[0].as_ref().unwrap_err();
+    assert_eq!(error.text.chars().count(), 101);
+    assert!(error.text.ends_with('…'));
 }
 
 #[test]

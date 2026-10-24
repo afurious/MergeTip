@@ -42,6 +42,7 @@ proptest! {
     fn accepted_commands_respect_the_grammar(body in comment()) {
         let results = parse_comment(&body);
         prop_assert!(results.len() <= body.split('\n').count());
+        prop_assert!(results.len() <= MAX_COMMANDS_PER_COMMENT + 1);
         let accepted: Vec<_> = results.iter().filter_map(|r| r.as_ref().ok()).collect();
         prop_assert!(accepted.len() <= MAX_COMMANDS_PER_COMMENT);
         for (i, result) in results.iter().enumerate() {
