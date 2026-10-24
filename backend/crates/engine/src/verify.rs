@@ -58,6 +58,9 @@ impl Engine {
         }
         let sender = users::get(&self.pool, tip.sender_id).await?;
         let installation = installations::get(&self.pool, tip.installation_id).await?;
+        if installation.suspended_at.is_some() {
+            return self.stop_for_suspension(&tip, TipState::Rejected).await;
+        }
         let request = VerifyRequest {
             installation: installation.github_installation_id,
             thread: &tip.thread,
@@ -163,6 +166,28 @@ impl Engine {
             }
         }
         tx.commit().await?;
+        Ok(())
+    }
+
+    /// Ends a tip whose installation was suspended or uninstalled after the comment was accepted.
+    /// No reply or reaction: GitHub refuses writes from a suspended installation.
+    pub(crate) async fn stop_for_suspension(
+        &self,
+        tip: &Tip,
+        to: TipState,
+    ) -> Result<(), EngineError> {
+        let mut tx = self.pool.begin().await?;
+        tips::transition(
+            &mut tx,
+            tip.id,
+            tip.state,
+            to,
+            &TipPatch::error("installation_suspended", None),
+            json!({ "reason": "installation_suspended" }),
+        )
+        .await?;
+        tx.commit().await?;
+        tracing::info!(tip_id = %tip.id, "tip stopped: installation suspended");
         Ok(())
     }
 

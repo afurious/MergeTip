@@ -19,6 +19,8 @@ struct Harness {
     github: Arc<FakeGitHub>,
     engine: Engine,
     deliveries: u32,
+    /// When set, `comment` only stores and enqueues; the test runs jobs step by step.
+    hold_jobs: bool,
 }
 
 impl Harness {
@@ -70,6 +72,7 @@ impl Harness {
             github,
             engine,
             deliveries: 0,
+            hold_jobs: false,
         }
     }
 
@@ -127,18 +130,24 @@ impl Harness {
             .await
             .unwrap();
         tx.commit().await.unwrap();
-        self.drain().await;
+        if !self.hold_jobs {
+            self.drain().await;
+        }
     }
 
     /// Runs queued jobs until none are left, dispatching by kind like the worker does. As in the
     /// worker, `pay_tip` only has a handler when the stub payer is on; otherwise paying tips wait.
     async fn drain(&self) {
-        let mut kinds: Vec<String> = [ProcessEvent::KIND, VerifyTip::KIND, PostReply::KIND]
-            .map(String::from)
-            .to_vec();
+        let mut kinds = vec![ProcessEvent::KIND, VerifyTip::KIND, PostReply::KIND];
         if self.engine.settings().stub_payer {
-            kinds.push(PayTip::KIND.into());
+            kinds.push(PayTip::KIND);
         }
+        self.run_only(&kinds).await;
+    }
+
+    /// Runs queued jobs of the given kinds only, leaving the rest queued.
+    async fn run_only(&self, kinds: &[&str]) {
+        let kinds: Vec<String> = kinds.iter().map(|k| (*k).to_owned()).collect();
         while let Some(job) = jobs::claim(&self.pool, &kinds, "test/1", Duration::from_secs(60))
             .await
             .unwrap()
@@ -459,5 +468,51 @@ async fn tips_github_can_no_longer_verify_are_closed(pool: PgPool) -> sqlx::Resu
     assert_eq!(states(&tips), ["rejected"]);
     assert_eq!(tips[0].2.as_deref(), Some("verification_unavailable"));
     assert!(h.github.posted_bodies()[0].contains("I couldn't check this tip on GitHub"));
+    Ok(())
+}
+
+async fn suspend(pool: &PgPool) {
+    sqlx::query!("UPDATE installations SET suspended_at = now()")
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+/// An installation suspended after a comment was accepted must not go on to verify or pay.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn suspension_stops_queued_verification(pool: PgPool) -> sqlx::Result<()> {
+    let mut h = Harness::new(pool, true);
+    h.hold_jobs = true;
+    h.comment(1001, (10, "maintainer"), "/tip @reviewer 100", 42)
+        .await;
+    h.run_only(&[ProcessEvent::KIND]).await;
+    suspend(&h.pool).await;
+    h.drain().await;
+
+    let tips = h.tips().await;
+    assert_eq!(states(&tips), ["rejected"]);
+    assert_eq!(tips[0].2.as_deref(), Some("installation_suspended"));
+    assert!(
+        h.github.posted_bodies().is_empty(),
+        "a suspended App can't post, so nothing is attempted"
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn suspension_stops_a_queued_payment(pool: PgPool) -> sqlx::Result<()> {
+    let mut h = Harness::new(pool, true);
+    h.hold_jobs = true;
+    h.comment(1001, (10, "maintainer"), "/tip @reviewer 100", 42)
+        .await;
+    h.run_only(&[ProcessEvent::KIND, VerifyTip::KIND]).await;
+    assert_eq!(states(&h.tips().await), ["paying"]);
+    suspend(&h.pool).await;
+    h.drain().await;
+
+    let tips = h.tips().await;
+    assert_eq!(states(&tips), ["failed"]);
+    assert_eq!(tips[0].2.as_deref(), Some("installation_suspended"));
+    assert!(h.github.posted_bodies().is_empty());
     Ok(())
 }

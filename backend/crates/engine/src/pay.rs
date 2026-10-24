@@ -30,6 +30,9 @@ impl Engine {
             return Ok(());
         }
         let installation = installations::get(&self.pool, tip.installation_id).await?;
+        if installation.suspended_at.is_some() {
+            return self.stop_for_suspension(&tip, TipState::Failed).await;
+        }
 
         let preimage = mergetip_crypto::random_bytes::<32>()
             .map_err(|err| EngineError::Malformed(err.to_string()))?;
