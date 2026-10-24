@@ -132,14 +132,22 @@ async fn request_id_is_generated_and_propagated() {
     assert_eq!(echoed.headers()["x-request-id"], "trace-me");
 }
 
+/// Rejected before routing, yet still readable by the web app: CORS headers and the JSON
+/// error shape are present.
 #[tokio::test]
-async fn oversized_bodies_are_rejected() {
+async fn oversized_bodies_are_rejected_in_the_error_shape() {
     let response = send(
         Request::post("/v1/health")
+            .header(header::ORIGIN, WEB)
             .header(header::CONTENT_LENGTH, 6 * 1024 * 1024)
             .body(Body::from(vec![b'x'; 6 * 1024 * 1024]))
             .unwrap(),
     )
     .await;
     assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    assert_eq!(response.headers()[header::ACCESS_CONTROL_ALLOW_ORIGIN], WEB);
+    assert_eq!(
+        json_body(response).await["error"]["code"],
+        "payload_too_large"
+    );
 }
