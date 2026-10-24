@@ -150,17 +150,13 @@ impl Engine {
                 json!({}),
             )
             .await?;
-            tips::transition(
+            reject_verifying(
                 tx,
-                tip.id,
-                TipState::Verifying,
-                TipState::Rejected,
+                context.github_installation,
+                &tip,
                 &TipPatch::error(code, None),
-                json!({ "reason": code }),
             )
             .await?;
-            context.tip_reply(tx, &tip, TipMessage::Rejected).await?;
-            context.react(tx, Reaction::Confused).await?;
             return Ok(false);
         }
 
@@ -266,6 +262,35 @@ impl CommentContext {
         )
         .await
     }
+}
+
+/// Rejects a tip in `verifying`: records why (`patch.error_code`), replies in the thread and
+/// reacts 😕 on the `/tip` comment. The one place rejection side effects are defined.
+pub(crate) async fn reject_verifying(
+    tx: &mut PgConnection,
+    installation: GithubInstallationId,
+    tip: &Tip,
+    patch: &TipPatch,
+) -> Result<(), EngineError> {
+    tips::transition(
+        tx,
+        tip.id,
+        TipState::Verifying,
+        TipState::Rejected,
+        patch,
+        json!({ "reason": patch.error_code }),
+    )
+    .await?;
+    enqueue_tip_reply(tx, installation, tip, TipMessage::Rejected).await?;
+    enqueue_reaction(
+        tx,
+        installation,
+        &tip.thread,
+        tip.comment_id,
+        Reaction::Confused,
+    )
+    .await?;
+    Ok(())
 }
 
 /// Queues a message about `tip` in its thread, at most once per tip and message kind.

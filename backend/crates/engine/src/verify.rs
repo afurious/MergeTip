@@ -1,10 +1,7 @@
 //! `verify_tip`: check the contribution, then decide what happens to the tip (FR-3, FR-12.2).
 
 use mergetip_core::{GithubUserId, Sats, TipKind, TipState};
-use mergetip_github::{
-    Reaction,
-    verifier::{self, VerifyError, VerifyRequest},
-};
+use mergetip_github::verifier::{self, VerifyError, VerifyRequest};
 use mergetip_store::{
     installations,
     tips::{self, Tip, TipPatch},
@@ -15,7 +12,7 @@ use time::Duration;
 
 use crate::{
     Engine, EngineError,
-    comments::{enqueue_reaction, enqueue_tip_reply},
+    comments::{enqueue_tip_reply, reject_verifying},
     jobs::{self, PayTip, TipMessage},
 };
 
@@ -100,27 +97,11 @@ impl Engine {
 
         match decide(tip.amount, tip.kind, &sender) {
             Decision::Reject(code) => {
-                tips::transition(
-                    &mut tx,
-                    tip.id,
-                    TipState::Verifying,
-                    TipState::Rejected,
-                    &TipPatch {
-                        error_code: Some(code.to_owned()),
-                        ..verified
-                    },
-                    json!({ "reason": code }),
-                )
-                .await?;
-                enqueue_tip_reply(&mut tx, github_installation, &tip, TipMessage::Rejected).await?;
-                enqueue_reaction(
-                    &mut tx,
-                    github_installation,
-                    &tip.thread,
-                    tip.comment_id,
-                    Reaction::Confused,
-                )
-                .await?;
+                let patch = TipPatch {
+                    error_code: Some(code.to_owned()),
+                    ..verified
+                };
+                reject_verifying(&mut tx, github_installation, &tip, &patch).await?;
             }
             Decision::Confirm => {
                 tips::transition(
@@ -179,24 +160,7 @@ impl Engine {
         code: &'static str,
     ) -> Result<(), EngineError> {
         let mut tx = self.pool.begin().await?;
-        tips::transition(
-            &mut tx,
-            tip.id,
-            TipState::Verifying,
-            TipState::Rejected,
-            &TipPatch::error(code, None),
-            json!({ "reason": code }),
-        )
-        .await?;
-        enqueue_tip_reply(&mut tx, installation, tip, TipMessage::Rejected).await?;
-        enqueue_reaction(
-            &mut tx,
-            installation,
-            &tip.thread,
-            tip.comment_id,
-            Reaction::Confused,
-        )
-        .await?;
+        reject_verifying(&mut tx, installation, tip, &TipPatch::error(code, None)).await?;
         tx.commit().await?;
         Ok(())
     }
