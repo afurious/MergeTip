@@ -402,6 +402,23 @@ impl System {
         self.api.clone().oneshot(request).await.unwrap().status()
     }
 
+    /// A delivery of a different comment (its own ID, so its own tips).
+    pub async fn deliver_comment(
+        &self,
+        delivery_id: &str,
+        comment_id: i64,
+        body: &str,
+    ) -> StatusCode {
+        let payload: Value = serde_json::from_str(&FIXTURE.replace("{{BODY}}", body).replacen(
+            "\"id\": 1001",
+            &format!("\"id\": {comment_id}"),
+            1,
+        ))
+        .unwrap();
+        self.deliver_event("issue_comment", delivery_id, &payload)
+            .await
+    }
+
     /// Sends any signed event, as GitHub would.
     pub async fn deliver_event(
         &self,
@@ -627,7 +644,9 @@ pub async fn mock_github(server: &MockServer) {
         .mount(server)
         .await;
     Mock::given(method("POST"))
-        .and(path("/repos/acme/widgets/issues/comments/1001/reactions"))
+        .and(path_regex(
+            r"^/repos/acme/widgets/issues/comments/\d+/reactions$",
+        ))
         .respond_with(ResponseTemplate::new(201).set_body_json(json!({ "id": 1 })))
         .mount(server)
         .await;

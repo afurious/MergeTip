@@ -726,3 +726,117 @@ async fn a_refund_is_recorded_only_for_the_full_tip(pool: PgPool) -> sqlx::Resul
     ));
     Ok(())
 }
+
+/// Exit criterion: NG bank, GH mobile money and KE M-Pesa payouts each reach `paid` through
+/// Bitnob's webhook (recorded fixtures until sandbox access exists).
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn each_corridor_reaches_paid_through_the_webhook(pool: PgPool) -> sqlx::Result<()> {
+    let w = World::new(pool).await;
+    {
+        let mut state = w.fiat.state();
+        state.limits = ["NGN", "GHS", "KES"]
+            .iter()
+            .zip(["NG", "GH", "KE"])
+            .map(|(currency, country)| Limit {
+                country: country.into(),
+                currency: (*currency).into(),
+                min_amount: Decimal::from(1),
+                max_amount: Decimal::from(5_000_000),
+            })
+            .collect();
+    }
+    let keyring = Keyring::from_hex(KEY, None).unwrap();
+    let corridors = [
+        (
+            "NG",
+            "NGN",
+            DestinationType::Bank,
+            "0123456789",
+            "058",
+            None,
+        ),
+        (
+            "GH",
+            "GHS",
+            DestinationType::MobileMoney,
+            "+233241234567",
+            "MTN",
+            Some("MTN"),
+        ),
+        (
+            "KE",
+            "KES",
+            DestinationType::MobileMoney,
+            "+254712345678",
+            "MPESA",
+            Some("MPESA"),
+        ),
+    ];
+    for (n, (country, currency, destination, account, bank, network)) in
+        corridors.into_iter().enumerate()
+    {
+        let id = uuid::Uuid::new_v4();
+        let beneficiary = Beneficiary {
+            destination_type: destination.as_str().into(),
+            country: country.into(),
+            account_name: "Receiver".into(),
+            account_number: account.into(),
+            bank_code: bank.into(),
+            network: network.map(str::to_owned),
+        };
+        let sealed = keyring
+            .seal(
+                &serde_json::to_vec(&beneficiary).unwrap(),
+                format!("payout_methods.beneficiary:{id}").as_bytes(),
+            )
+            .unwrap();
+        let mut conn = w.pool.acquire().await?;
+        payout_methods::insert(
+            &mut conn,
+            &NewPayoutMethod {
+                id,
+                user_id: w.receiver.id,
+                country,
+                currency,
+                destination_type: destination,
+                beneficiary_ciphertext: &sealed,
+                provider_customer_id: None,
+                verified_at: OffsetDateTime::now_utc(),
+                is_default: true,
+            },
+        )
+        .await
+        .unwrap();
+
+        w.invoices(5_000, 1);
+        let tip = w.paying_tip(5_000).await;
+        w.engine.pay_tip(tip, false).await.unwrap();
+        let funded = w.tip(tip).await;
+        assert_eq!(funded.state, TipState::FiatProcessing, "{country}");
+        assert_eq!(funded.fiat.currency.as_deref(), Some(currency));
+        let payout = funded.fiat.payout_id.clone().unwrap();
+        let reference = format!("{tip}:1:1");
+        webhook(
+            &w,
+            &format!("{country}-1"),
+            "payouts.processing",
+            &payout,
+            &reference,
+        )
+        .await;
+        webhook(
+            &w,
+            &format!("{country}-2"),
+            "payouts.withdrawal.success",
+            &payout,
+            &reference,
+        )
+        .await;
+        assert_eq!(w.tip(tip).await.state, TipState::Paid, "{country}");
+        let sent_to = &w.fiat.state().initialized[n].2;
+        assert_eq!(sent_to.country, country);
+        assert_eq!(sent_to.network.as_deref(), network);
+    }
+    assert_eq!(w.wallet.paid().len(), 3);
+    Ok(())
+}

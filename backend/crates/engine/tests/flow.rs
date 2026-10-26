@@ -725,3 +725,31 @@ async fn retried_status_reply_does_not_repeat_its_line(pool: PgPool) -> sqlx::Re
     );
     Ok(())
 }
+
+/// Critical test 5: a self-tip, a bot and an unknown user are each rejected with their reply.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn self_bot_and_unknown_receivers_are_rejected_with_the_right_reply(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let mut h = Harness::new(pool, true);
+    let mut bot = FakeGitHub::account(14, "renovate");
+    bot.kind = mergetip_github::AccountKind::Bot;
+    h.github.add_user(bot);
+    h.comment(
+        1001,
+        (10, "maintainer"),
+        "/tip @maintainer 100\n/tip @renovate 100\n/tip @nobody-here 100",
+        42,
+    )
+    .await;
+
+    let tips = h.tips().await;
+    let codes: Vec<_> = tips.iter().map(|t| t.2.as_deref().unwrap_or("")).collect();
+    assert_eq!(states(&tips), ["rejected", "rejected", "rejected"]);
+    assert_eq!(codes, ["self_tip", "bot_receiver", "unknown_user"]);
+    let posted = h.github.posted_bodies().join("\n");
+    assert!(posted.contains("😕 @maintainer, you can't tip yourself."));
+    assert!(posted.contains("`renovate` is a bot account. Tips go to people."));
+    assert!(posted.contains("there is no GitHub user `nobody-here`"));
+    Ok(())
+}
