@@ -146,3 +146,26 @@ async fn malformed_uris_are_refused_without_network() {
         );
     }
 }
+
+/// Against a real relay (`docker compose up relay`), to check a production relay handles the
+/// NIP-47 event kinds as the in-process one does:
+/// `LIVE_RELAY_URL=ws://localhost:7000 cargo test -p mergetip-payer -- --ignored live_relay`
+#[tokio::test]
+#[ignore = "needs a running relay; set LIVE_RELAY_URL"]
+async fn live_relay_round_trip() {
+    let url = std::env::var("LIVE_RELAY_URL").expect("LIVE_RELAY_URL");
+    let wallet = MockWallet::start(&url, SEED).await.unwrap();
+    let client = NwcWallet::connect(wallet.uri()).await.unwrap();
+    let info = client.get_info().await.unwrap();
+    assert!(info.supports("pay_invoice"));
+    let minted = invoice(21);
+    let proof = client
+        .pay_invoice(
+            &minted.bolt11,
+            &minted.payment_hash,
+            Duration::from_secs(15),
+        )
+        .await
+        .unwrap();
+    assert_eq!(proof.preimage, minted.preimage);
+}

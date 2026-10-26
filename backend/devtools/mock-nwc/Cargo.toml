@@ -11,8 +11,9 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
-tokio.workspace = true
+mergetip-payer = { workspace = true, features = ["testing"] }
 anyhow.workspace = true
+hex.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-nostr-sdk.workspace = true

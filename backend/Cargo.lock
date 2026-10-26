@@ -2227,9 +2227,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "hex",
+ "mergetip-core",
+ "mergetip-payer",
  "serde",
  "serde_json",
+ "time",
  "tokio",
+ "tower",
  "tracing",
  "tracing-subscriber",
 ]
@@ -2239,7 +2244,8 @@ name = "mock-nwc"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "nostr-sdk",
+ "hex",
+ "mergetip-payer",
  "tokio",
  "tracing",
  "tracing-subscriber",

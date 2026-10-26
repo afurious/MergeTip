@@ -113,7 +113,7 @@ mod tests {
     }
 }
 
-pub use mock_wallet::{MockWallet, behaviour};
+pub use mock_wallet::{MockWallet, MockWalletOptions, behaviour};
 
 mod mock_wallet {
     //! A NIP-47 wallet on a relay, for tests and local development. It pays invoices minted
@@ -169,13 +169,49 @@ mod mock_wallet {
         }
     }
 
+    /// How a [`MockWallet`] runs. Fixed keys keep its URI stable across restarts (local dev).
+    #[derive(Debug, Clone)]
+    pub struct MockWalletOptions {
+        /// Where the wallet connects.
+        pub relay: String,
+        /// The relay written into the URI, if clients reach it at another address (e.g. the
+        /// wallet runs in Docker Compose and clients on the host).
+        pub advertised_relay: Option<String>,
+        pub seed: [u8; 32],
+        pub wallet_secret: Option<[u8; 32]>,
+        pub app_secret: Option<[u8; 32]>,
+    }
+
     impl MockWallet {
         /// Publishes the wallet's info event on `relay_url` and starts answering requests.
         pub async fn start(relay_url: &str, seed: [u8; 32]) -> Result<Self, PayError> {
-            let relay =
-                RelayUrl::parse(relay_url).map_err(|err| PayError::Relay(err.to_string()))?;
-            let wallet = Keys::generate();
-            let app = Keys::generate();
+            Self::start_with(MockWalletOptions {
+                relay: relay_url.to_owned(),
+                advertised_relay: None,
+                seed,
+                wallet_secret: None,
+                app_secret: None,
+            })
+            .await
+        }
+
+        pub async fn start_with(options: MockWalletOptions) -> Result<Self, PayError> {
+            let parse =
+                |url: &str| RelayUrl::parse(url).map_err(|err| PayError::Relay(err.to_string()));
+            let relay = parse(&options.relay)?;
+            let advertised = match &options.advertised_relay {
+                Some(url) => parse(url)?,
+                None => relay.clone(),
+            };
+            let keys = |secret: Option<[u8; 32]>| match secret {
+                Some(bytes) => nostr_sdk::prelude::SecretKey::from_slice(&bytes)
+                    .map(Keys::new)
+                    .map_err(|err| PayError::Protocol(err.to_string())),
+                None => Ok(Keys::generate()),
+            };
+            let wallet = keys(options.wallet_secret)?;
+            let app = keys(options.app_secret)?;
+            let seed = options.seed;
             let client = Client::default();
             client
                 .add_relay(&relay)
@@ -223,7 +259,7 @@ mod mock_wallet {
 
             let uri = NostrWalletConnectUri::new(
                 wallet.public_key(),
-                vec![relay],
+                vec![advertised],
                 app.secret_key().clone(),
                 None,
             );
