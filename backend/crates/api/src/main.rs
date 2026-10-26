@@ -23,6 +23,9 @@ enum Command {
     Serve,
     /// Print the OpenAPI document to stdout.
     Openapi,
+    /// Apply pending database migrations and exit (Fly `release_command`). Migrations are
+    /// additive, so the running version keeps working while the new one rolls out.
+    Migrate,
 }
 
 #[tokio::main]
@@ -33,7 +36,27 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
         Command::Serve => serve().await,
+        Command::Migrate => migrate().await,
     }
+}
+
+async fn migrate() -> anyhow::Result<()> {
+    dotenvy::dotenv().ok();
+    let app_env = std::env::var("APP_ENV")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(mergetip_runtime::AppEnv::Dev);
+    let sentry_dsn = std::env::var("SENTRY_DSN")
+        .ok()
+        .filter(|v| !v.trim().is_empty());
+    let _logs = telemetry::init(app_env, sentry_dsn.as_deref());
+    let url = std::env::var("DATABASE_URL").context("DATABASE_URL is required")?;
+    let pool = db::connect(&url, 1)
+        .await
+        .context("cannot connect to the database")?;
+    db::migrate(&pool).await.context("migrations failed")?;
+    tracing::info!("migrations applied");
+    Ok(())
 }
 
 async fn serve() -> anyhow::Result<()> {

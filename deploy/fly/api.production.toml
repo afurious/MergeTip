@@ -1,0 +1,46 @@
+# Fly.io config for mergetip-api (production). Deploy only through the tagged release workflow.
+app = "mergetip-api-production"
+primary_region = "jnb"
+
+[build]
+  dockerfile = "../../backend/Dockerfile"
+  [build.args]
+    BIN = "mergetip-api"
+
+[env]
+  APP_ENV = "production"
+  LIGHTNING_NETWORK = "bitcoin"
+  # Prometheus on an internal port; Fly scrapes it, nothing routes it publicly.
+  METRICS_ADDR = "0.0.0.0:9091"
+
+[metrics]
+  port = 9091
+  path = "/metrics"
+
+# Migrations run once per release, before new machines start (they are additive only).
+[deploy]
+  # The image ENTRYPOINT is /app; this is its argument.
+  release_command = "migrate"
+  strategy = "rolling"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  # Two machines: one in Johannesburg, one in Frankfurt (fly scale count 2 --region jnb,fra).
+  min_machines_running = 2
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 400
+
+  [[http_service.checks]]
+    path = "/healthz"
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
