@@ -7,6 +7,7 @@ pub(crate) mod confirmations;
 pub(crate) mod email;
 pub(crate) mod health;
 pub(crate) mod me;
+pub(crate) mod payouts;
 pub(crate) mod settings;
 pub(crate) mod tips;
 pub(crate) mod users;
@@ -61,6 +62,16 @@ pub fn router(state: AppState) -> Router {
         .route("/me", get(me::get_me).delete(me::delete_me))
         .route("/me/tips", get(tips::list_my_tips))
         .route("/users/{login}/receive-status", get(users::receive_status))
+        .route("/payouts/countries", get(payouts::list_countries))
+        .route("/payouts/countries/{code}", get(payouts::country_form))
+        .route(
+            "/me/payout-methods",
+            get(payouts::list_methods).post(payouts::add_method),
+        )
+        .route(
+            "/me/payout-methods/{id}",
+            patch(payouts::update_method).delete(payouts::delete_method),
+        )
         .route("/tips/comment", post(compose::post_tip_comment))
         .route(
             "/me/wallet",

@@ -114,6 +114,20 @@ pub fn mailer_config(
     })
 }
 
+/// Fiat payouts through Bitnob (RFC 0004). `None` unless `FIAT_PAYOUTS_ENABLED=true`; then the
+/// Bitnob credentials are required. The `fiat_payouts` flag row must also be on at runtime.
+pub fn bitnob_config(env: &impl Env) -> Result<Option<mergetip_fiat::BitnobConfig>, ConfigError> {
+    if !env.parse_or("FIAT_PAYOUTS_ENABLED", false)? {
+        return Ok(None);
+    }
+    Ok(Some(mergetip_fiat::BitnobConfig {
+        base_url: env.required("BITNOB_BASE_URL")?,
+        client_id: env.required("BITNOB_CLIENT_ID")?,
+        client_secret: mergetip_crypto::Redacted::new(env.required("BITNOB_SECRET")?),
+        retry_backoff: std::time::Duration::from_millis(500),
+    }))
+}
+
 /// The real process environment.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ProcessEnv;
@@ -143,6 +157,25 @@ mod tests {
             env.required("MASTER_KEY"),
             Err(ConfigError::Missing("MASTER_KEY"))
         );
+    }
+
+    #[test]
+    fn fiat_is_off_unless_enabled_and_then_needs_credentials() {
+        let off = HashMap::from([("BITNOB_CLIENT_ID", "x")]);
+        assert!(bitnob_config(&off).unwrap().is_none());
+        let on = HashMap::from([("FIAT_PAYOUTS_ENABLED", "true")]);
+        assert_eq!(
+            bitnob_config(&on).map(|_| ()),
+            Err(ConfigError::Missing("BITNOB_BASE_URL"))
+        );
+        let full = HashMap::from([
+            ("FIAT_PAYOUTS_ENABLED", "true"),
+            ("BITNOB_BASE_URL", "https://api.bitnob.com"),
+            ("BITNOB_CLIENT_ID", "id"),
+            ("BITNOB_SECRET", "secret"),
+        ]);
+        let config = bitnob_config(&full).unwrap().unwrap();
+        assert!(!format!("{config:?}").contains("secret\""));
     }
 
     #[test]

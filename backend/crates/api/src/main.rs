@@ -64,6 +64,13 @@ async fn serve() -> anyhow::Result<()> {
         receivers: Arc::new(receivers),
         mailer: mergetip_notify::from_config(&config.mailer)
             .context("cannot set up email delivery")?,
+        fiat: match &config.bitnob {
+            Some(bitnob) => Some(Arc::new(
+                mergetip_fiat::BitnobClient::new(bitnob.clone())
+                    .context("cannot set up the Bitnob client")?,
+            )),
+            None => None,
+        },
     };
     let state = AppState::new(pool, config.clone(), clock, services);
 

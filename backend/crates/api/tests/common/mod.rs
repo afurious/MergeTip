@@ -90,6 +90,7 @@ pub fn state_with_mailer(
             wallets,
             receivers,
             mailer,
+            fiat: None,
         },
     )
 }
@@ -212,4 +213,123 @@ pub async fn send(
         status,
         serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null),
     )
+}
+
+/// An app with fiat payouts on (provider and runtime flag), backed by `fiat`.
+pub async fn fiat_app(pool: PgPool, fiat: Arc<mergetip_fiat::testing::FakeFiat>) -> Router {
+    mergetip_store::feature_flags::set(&pool, mergetip_store::feature_flags::FIAT_PAYOUTS, true)
+        .await
+        .unwrap();
+    let env = env("http://127.0.0.1:9");
+    let env: HashMap<&str, &str> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    let config = Arc::new(ApiConfig::from_env(&env).unwrap());
+    let oauth = OAuthClient::new(
+        config.github_client_id.clone(),
+        Redacted::new("client-secret".to_owned()),
+        &config.github_oauth_url,
+        &config.github_api_url,
+    )
+    .unwrap();
+    router(AppState::new(
+        pool,
+        config,
+        Arc::new(SystemClock),
+        Services {
+            oauth: Arc::new(oauth),
+            wallets: Arc::new(NwcConnector),
+            receivers: Arc::new(FakeReceivers),
+            mailer: Arc::new(mergetip_notify::DisabledMailer),
+            fiat: Some(fiat),
+        },
+    ))
+}
+
+/// A Bitnob-like fake with Nigeria (bank) and Ghana (mobile money) set up, and one account of
+/// each that Account Lookup resolves.
+pub fn fake_fiat() -> Arc<mergetip_fiat::testing::FakeFiat> {
+    use mergetip_fiat::{
+        Bank, Corridor, Country, CountryRequirements, FormField, Limit, Rail, ResolvedAccount,
+    };
+
+    let fiat = Arc::new(mergetip_fiat::testing::FakeFiat::new());
+    {
+        let mut state = fiat.state();
+        state.countries = vec![
+            Country {
+                code: "NG".into(),
+                name: "Nigeria".into(),
+                corridors: vec![Corridor {
+                    currency: "NGN".into(),
+                    destination_types: vec!["bank".into()],
+                }],
+            },
+            Country {
+                code: "GH".into(),
+                name: "Ghana".into(),
+                corridors: vec![Corridor {
+                    currency: "GHS".into(),
+                    destination_types: vec!["mobile_money".into()],
+                }],
+            },
+        ];
+        let field = |key: &str, label: &str| FormField {
+            key: key.into(),
+            label: label.into(),
+            kind: "string".into(),
+            required: true,
+            component: Some("input".into()),
+            pattern: None,
+            min_length: Some(10),
+            max_length: Some(10),
+            placeholder: None,
+            options: None,
+        };
+        state.requirements.insert(
+            "NG".into(),
+            CountryRequirements {
+                code: "NG".into(),
+                name: "Nigeria".into(),
+                destination_types: [(
+                    "bank".to_owned(),
+                    Rail {
+                        label: Some("Bank account".into()),
+                        fields: vec![
+                            field("account_number", "Account number"),
+                            field("bank_code", "Bank"),
+                        ],
+                        banks: Some(vec![Bank {
+                            bank_code: "058".into(),
+                            bank_name: "GTBank".into(),
+                        }]),
+                    },
+                )]
+                .into(),
+            },
+        );
+        state.limits = vec![Limit {
+            country: "NG".into(),
+            currency: "NGN".into(),
+            min_amount: rust_decimal::Decimal::from(1_000),
+            max_amount: rust_decimal::Decimal::from(5_000_000),
+        }];
+        state.accounts.insert(
+            "0123456789".into(),
+            ResolvedAccount {
+                account_name: "Ada Obi".into(),
+                bank_name: Some("GTBank".into()),
+                bank_code: Some("058".into()),
+                is_verified: true,
+            },
+        );
+        state.accounts.insert(
+            "+233241234567".into(),
+            ResolvedAccount {
+                account_name: "Kofi Mensah".into(),
+                bank_name: Some("MTN".into()),
+                bank_code: Some("MTN".into()),
+                is_verified: true,
+            },
+        );
+    }
+    fiat
 }

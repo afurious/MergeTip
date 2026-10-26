@@ -2048,6 +2048,7 @@ dependencies = [
  "mergetip-core",
  "mergetip-crypto",
  "mergetip-engine",
+ "mergetip-fiat",
  "mergetip-github",
  "mergetip-notify",
  "mergetip-parser",
@@ -2055,6 +2056,7 @@ dependencies = [
  "mergetip-runtime",
  "mergetip-store",
  "nostr-sdk",
+ "rust_decimal",
  "serde",
  "serde_json",
  "sqlx",
@@ -2252,6 +2254,7 @@ name = "mergetip-runtime"
 version = "0.1.0"
 dependencies = [
  "mergetip-crypto",
+ "mergetip-fiat",
  "mergetip-notify",
  "mergetip-store",
  "sqlx",

@@ -18,6 +18,11 @@ use crate::{
         email,
         health::{self, Health},
         me::{self, Caps, Me, WalletStatus},
+        payouts::{
+            self, NewPayoutMethodRequest, PayoutBank, PayoutCorridor, PayoutCountry,
+            PayoutCountryForm, PayoutField, PayoutForm, PayoutMethodView,
+            UpdatePayoutMethodRequest,
+        },
         settings::{self, AddressRequest, SettingsRequest, WalletRequest},
         tips::{self, Tip, TipEnvelope, TipKindBody, TipList, TipState, UserRef},
         users::{self, ReceiveMethod, ReceiveStatus},
@@ -45,6 +50,12 @@ use crate::{
         tips::list_my_tips,
         users::receive_status,
         compose::post_tip_comment,
+        payouts::list_countries,
+        payouts::country_form,
+        payouts::list_methods,
+        payouts::add_method,
+        payouts::update_method,
+        payouts::delete_method,
         settings::connect_wallet,
         settings::disconnect_wallet,
         settings::set_lightning_address,
@@ -82,6 +93,15 @@ use crate::{
         ReceiveMethod,
         TipCommentRequest,
         PostedTipComment,
+        PayoutCountry,
+        PayoutCorridor,
+        PayoutCountryForm,
+        PayoutForm,
+        PayoutField,
+        PayoutBank,
+        PayoutMethodView,
+        NewPayoutMethodRequest,
+        UpdatePayoutMethodRequest,
     )),
     modifiers(&SecuritySchemes),
     tags(
@@ -94,6 +114,7 @@ use crate::{
         (name = "email", description = "Email preferences reachable from emails"),
         (name = "tips", description = "Sending tips from the browser extension"),
         (name = "users", description = "Other GitHub users"),
+        (name = "payouts", description = "Receiving tips in local currency"),
     )
 )]
 pub struct ApiDoc;

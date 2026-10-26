@@ -2,6 +2,7 @@ use std::{fmt, sync::Arc};
 
 use mergetip_core::Clock;
 use mergetip_crypto::Keyring;
+use mergetip_fiat::FiatProvider;
 use mergetip_github::oauth::GitHubOAuth;
 use mergetip_notify::Mailer;
 use mergetip_payer::{ReceiverEndpoint, WalletConnector};
@@ -29,6 +30,8 @@ pub struct Services {
     pub receivers: Arc<dyn ReceiverEndpoint>,
     /// Sends confirmation codes. The worker sends everything else.
     pub mailer: Arc<dyn Mailer>,
+    /// Fiat payouts; `None` unless `FIAT_PAYOUTS_ENABLED`.
+    pub fiat: Option<Arc<dyn FiatProvider>>,
 }
 
 impl AppState {
@@ -60,6 +63,10 @@ impl AppState {
 
     pub fn mailer(&self) -> &dyn Mailer {
         self.0.services.mailer.as_ref()
+    }
+
+    pub fn fiat(&self) -> Option<&dyn FiatProvider> {
+        self.0.services.fiat.as_deref()
     }
 
     pub fn pool(&self) -> &PgPool {

@@ -12,6 +12,7 @@ workspace = true
 
 [dependencies]
 mergetip-crypto.workspace = true
+mergetip-fiat.workspace = true
 mergetip-notify.workspace = true
 mergetip-store.workspace = true
 sqlx.workspace = true

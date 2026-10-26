@@ -805,6 +805,25 @@ pub async fn lock_by_payout_id(
     .transpose()
 }
 
+/// The most recent exchange rate quoted for `currency` (local units per BTC), if any. Used to
+/// estimate a corridor's minimum in sats without asking for a quote.
+pub async fn latest_fx_rate(
+    exec: impl PgExecutor<'_>,
+    currency: &str,
+) -> StoreResult<Option<Decimal>> {
+    let rate = sqlx::query_scalar!(
+        r#"
+        SELECT fx_rate AS "fx_rate!" FROM tips
+        WHERE fiat_currency = $1 AND fx_rate IS NOT NULL
+        ORDER BY updated_at DESC LIMIT 1
+        "#,
+        currency
+    )
+    .fetch_optional(exec)
+    .await?;
+    Ok(rate)
+}
+
 /// Tips per state, for the `tips_in_state` gauge.
 pub async fn count_by_state(exec: impl PgExecutor<'_>) -> StoreResult<Vec<(String, i64)>> {
     let rows = sqlx::query!(r#"SELECT state, count(*) AS "n!" FROM tips GROUP BY state"#)
