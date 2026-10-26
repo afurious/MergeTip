@@ -2,7 +2,9 @@
 
 - Author: backend
 - PRD requirement(s): FR-10, FR-12.7, "Bitnob payout flow"
-- Status: accepted (behind `fiat_payouts` and `FIAT_PAYOUTS_ENABLED`)
+- Status: **withdrawn** (2026-10-27). Fiat payouts were removed before release: receivers are
+  paid over Lightning only. The code, schema (migration `remove_fiat`), endpoints, alert and
+  runbooks are gone; this RFC stays as the record of the design.
 
 ## Problem
 

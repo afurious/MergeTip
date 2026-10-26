@@ -13,5 +13,5 @@ and CI (`cargo test --workspace` against Postgres). Paths are under `backend/cra
 | 6 | An over-threshold tip "confirmed" through a comment is not paid | `engine/tests/confirmations.rs::no_comment_can_confirm_a_high_value_tip`; `e2e/tests/journeys.rs::a_high_value_tip_is_paid_only_after_web_confirmation` |
 | 7 | The daily cap hit mid-batch never overspends | `engine/tests/payments.rs::concurrent_payments_never_exceed_the_daily_cap` |
 | 8 | A reused claim token is refused | `api/tests/claims.rs::the_receiver_claims_once_and_payment_starts`, `api/tests/claims.rs::two_claims_at_once_pay_once` |
-| 9 | A Bitnob quote expiring during the NWC payment gets one re-quote, then fails cleanly | `engine/tests/fiat.rs::a_quote_expiring_during_payment_requotes_once_then_fails` |
+| 9 | A payment the wallet can't confirm is never paid again | `engine/tests/payments.rs::an_unconfirmable_payment_is_never_paid_again` |
 | 10 | No NWC URI, `secret=`, email, OTP, session, bearer or GitHub token appears in the logs | `e2e/tests/log_scan.rs::no_secret_ever_reaches_the_logs` (journeys A, extension token, OTP confirmation and a pledge claim, captured at `debug`); also `api/tests/log_redaction.rs`, `api/tests/payout_logs.rs` |

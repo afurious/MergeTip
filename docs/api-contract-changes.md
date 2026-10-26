@@ -1,10 +1,12 @@
 # API contract changes
 
 Every change to the frozen v1 contract in [`api-contract.md`](api-contract.md), newest first.
-Changes are additive: nothing is removed or renamed, and old shapes keep working.
+Changes are additive: nothing is removed or renamed, and old shapes keep working. The one
+exception is the removal of fiat payouts (2026-10-27), which no client had used.
 
 | Date | Change | Why |
 | --- | --- | --- |
+| 2026-10-27 | **Breaking, deliberate:** fiat payouts removed. Gone: `GET /v1/payouts/countries`, `GET /v1/payouts/countries/{code}`, `GET` and `POST /v1/me/payout-methods`, `PATCH` and `DELETE /v1/me/payout-methods/{id}`, `POST /v1/webhooks/bitnob`, `Tip.fiat`, the `fiat` value of `ReceiveStatus.method` and `ReceiveStatus.fiat_min_sats`, and the `fiat_disabled` error code | Product decision: MergeTip pays receivers over Lightning only (RFC 0004 withdrawn). Nothing was released and no frontend code called these |
 | 2026-10-27 | `GET /v1/email/unsubscribe` now only shows a confirm page (opening the link changes nothing); `POST` unsubscribes, answering 204 to an RFC 8058 one-click (`List-Unsubscribe=One-Click`) and an HTML page to the confirm page's button | Mail scanners and link previews fetch every link in an email, and were unsubscribing people (M4 review) |
 | 2026-10-27 | `PATCH /v1/me/settings` answers 403 `reauth_required` when a change loosens a protection (turning confirmation codes off, raising the confirmation threshold, the per-tip or the daily cap) unless the request uses the web session cookie from a sign-in in the last 15 minutes. The web app should send the user through `/v1/auth/github/login?redirect=/settings/...` and retry. Tightening needs nothing extra | A stolen session (or extension token) could otherwise switch codes off and confirm a large tip (M4 review) |
 | 2026-10-26 | `Tip` gains an optional `fiat` object (`currency`, `amount`, `rate`, `fees` as decimal strings, `status`); `null` for Lightning tips | FR-10.6: the dashboard shows fiat amount, rate, fees and delivery status per tip. No destination details are included |

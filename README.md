@@ -22,7 +22,6 @@ Connect (NWC), and receivers get paid to their own Lightning address.
 │   │   ├── parser/          # /tip command grammar (pure, no I/O)
 │   │   ├── github/          # octocrab wrapper: App auth, verifier, bot replies
 │   │   ├── payer/           # NWC client, LNURL resolver, invoice validation
-│   │   ├── fiat/            # Bitnob client: quotes, payouts, webhooks
 │   │   ├── notify/          # email (Resend/Postmark) + templates
 │   │   ├── store/           # sqlx repositories, job queue
 │   │   ├── crypto/          # envelope encryption, HMAC helpers, Redacted<T>
@@ -54,7 +53,6 @@ Connect (NWC), and receivers get paid to their own Lightning address.
 | Database | Postgres 16 via sqlx; `FOR UPDATE SKIP LOCKED` job queue |
 | GitHub | octocrab (App JWT + installation tokens) |
 | Payments | rust-nostr `nwc` (NIP-47/NIP-44), `lnurl-rs`, `lightning-invoice` |
-| Fiat | Bitnob Payouts API (NG, GH, KE) |
 | Email | Resend (fallback Postmark); Mailpit locally |
 | API contract | OpenAPI via utoipa → openapi-typescript + openapi-fetch |
 | Web app | SvelteKit, Svelte 5, Tailwind CSS, Breez SDK (Spark) WASM |

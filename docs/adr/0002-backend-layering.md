@@ -19,7 +19,7 @@ Crates are layered. A crate may depend only on crates in the layers below it.
 | Domain | `core`, `parser` | No | Tip states and transitions, money newtypes, IDs, `Clock`, the `/tip` grammar |
 | Primitives | `crypto` | No (OS randomness only) | Envelope encryption, `Redacted<T>`, HMAC, tokens |
 | Persistence | `store` | Postgres | Repositories and the job queue. `store::tips::transition` is the only writer of `tips.state` |
-| Adapters | `github`, `payer`, `notify`, `fiat` | External services | Each exposes a trait plus a real implementation, so tests swap in fakes |
+| Adapters | `github`, `payer`, `notify` | External services | Each exposes a trait plus a real implementation, so tests swap in fakes |
 | Use cases | `engine` (from M2) | Through the traits above | Tip creation, verification, payment and expiry flows, shared by both binaries |
 | Process plumbing | `runtime` | Env, signals, Postgres | Typed config, tracing setup, pool and migrations, shutdown token |
 | Binaries | `api`, `worker` | Yes | Thin: parse input, call `engine` or `store`, map results. No business rules |

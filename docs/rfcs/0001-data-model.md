@@ -14,7 +14,7 @@ to launch.
 ## Proposal
 
 One `init` migration creates the tables below. Payment attempts and sessions (M3), OTP codes and
-email deliveries (M4), and fiat payout tables (M5) arrive later as separate additive migrations.
+email deliveries (M4) arrive later as separate additive migrations.
 
 | Table | Purpose | Key constraints |
 | --- | --- | --- |
@@ -107,4 +107,6 @@ This RFC introduces the schema. It makes no API changes.
 ## Rollout (feature flag, migration plan)
 
 The `init` migration runs on an empty database. `feature_flags` is seeded with
-`payments_enabled = true` and `fiat_payouts = false`. All later changes are expand-only migrations.
+`payments_enabled = true` and `fiat_payouts = false`. All later changes are expand-only
+migrations, except `remove_fiat`, which drops the never-released fiat payout schema (RFC 0004
+withdrawn) and the `fiat_payouts` flag.
