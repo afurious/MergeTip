@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT state, payment_hash FROM tips",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "state"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "payment_hash",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "payment_hash"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "f7784210341530613f7ebc01e692ae7e1fd9ae56372cf81a247b56aa90c4b5bc"
+}

@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT state, error_code, payment_hash FROM tips",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "state"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "error_code",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "error_code"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "payment_hash",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "payment_hash"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "3fbd5f0e062261ddcc47e5bd7efec9162efb090c22bbba42561e37d372b98db1"
+}

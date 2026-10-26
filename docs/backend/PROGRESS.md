@@ -43,7 +43,7 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 - [x] 3.7 Real `pay_tip`
 - [x] 3.8 Reconciliation
 - [x] 3.9 Devtools mocks
-- [ ] 3.10 Receipts and E2E journey
+- [x] 3.10 Receipts and E2E journey
 - [ ] Handover
 
 ## M4: Edge flows and notifications

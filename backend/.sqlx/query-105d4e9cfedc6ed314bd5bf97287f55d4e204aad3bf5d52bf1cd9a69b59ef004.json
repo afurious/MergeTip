@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.status, a.amount_msat, t.preimage\n         FROM payment_attempts a JOIN tips t ON t.id = a.tip_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "payment_attempts",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "amount_msat",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "payment_attempts",
+            "name": "amount_msat"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "preimage",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "preimage"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "105d4e9cfedc6ed314bd5bf97287f55d4e204aad3bf5d52bf1cd9a69b59ef004"
+}
