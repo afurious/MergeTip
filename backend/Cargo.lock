@@ -2320,6 +2320,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tower",
+ "tracing-subscriber",
  "wiremock",
 ]
 

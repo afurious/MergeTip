@@ -70,7 +70,7 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 - [x] 5.6 Stuck-payout operations
 - [x] 5.7 Metrics and alerts
 - [x] 5.8 Abuse and HTTP hardening
-- [ ] 5.9 Critical-test audit
+- [x] 5.9 Critical-test audit
 - [ ] 5.10 Coverage gate
 - [ ] 5.11 Container and deploy
 - [ ] 5.12 CI gates
