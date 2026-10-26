@@ -18,6 +18,7 @@ mergetip-store.workspace = true
 mergetip-crypto.workspace = true
 mergetip-engine.workspace = true
 mergetip-notify.workspace = true
+mergetip-parser.workspace = true
 mergetip-runtime.workspace = true
 anyhow.workspace = true
 axum.workspace = true

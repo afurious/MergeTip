@@ -193,7 +193,11 @@ export interface paths {
         get: operations["get_me"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete the account: secrets and personal data are erased and waiting tips are closed. Tip
+         *     records stay, anonymised, so replayed webhooks still can't create duplicates.
+         */
+        delete: operations["delete_me"];
         options?: never;
         head?: never;
         patch?: never;
@@ -233,6 +237,23 @@ export interface paths {
         patch: operations["update_settings"];
         trace?: never;
     };
+    "/v1/me/tips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in user's tips, newest first, 50 per page. */
+        get: operations["list_my_tips"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/wallet": {
         parameters: {
             query?: never;
@@ -246,6 +267,40 @@ export interface paths {
         post?: never;
         /** Disconnect the sender's wallet. */
         delete: operations["disconnect_wallet"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tips/comment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post a `/tip` comment on GitHub as the signed-in user. */
+        post: operations["post_tip_comment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/users/{login}/receive-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether a GitHub user can receive a tip right now. Unknown users can't, yet. */
+        get: operations["receive_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -348,6 +403,15 @@ export interface components {
             lightning_address?: string | null;
             wallet: components["schemas"]["WalletStatus"];
         };
+        PostedTipComment: {
+            comment_url: string;
+        };
+        /** @enum {string} */
+        ReceiveMethod: "lightning_address" | "none";
+        ReceiveStatus: {
+            login: string;
+            method: components["schemas"]["ReceiveMethod"];
+        };
         SettingsRequest: {
             confirm_otp_enabled?: boolean | null;
             /** Format: int64 */
@@ -385,12 +449,31 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        TipCommentRequest: {
+            /** Format: int64 */
+            amount_sats: number;
+            /** @enum {string} */
+            kind: "now" | "on_merge";
+            note?: string | null;
+            /** @description GitHub login, without `@`. */
+            receiver: string;
+            /** @description `owner/name`. */
+            repo: string;
+            /** Format: int32 */
+            thread_number: number;
+        };
         /** @description `{ tip }`, the body of the claim and confirmation endpoints. */
         TipEnvelope: {
             tip: components["schemas"]["Tip"];
         };
         /** @enum {string} */
         TipKindBody: "now" | "on_merge";
+        /** @description A page of the signed-in user's tips. */
+        TipList: {
+            items: components["schemas"]["Tip"][];
+            /** @description Pass back as `cursor` for the next page; `null` on the last page. */
+            next_cursor?: string | null;
+        };
         /**
          * @description A tip's state as clients see it. Internal fiat states map onto the closest public one until
          *     fiat payouts add their own values (M5).
@@ -968,6 +1051,33 @@ export interface operations {
             };
         };
     };
+    delete_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted and signed out */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     set_lightning_address: {
         parameters: {
             query?: never;
@@ -1032,6 +1142,50 @@ export interface operations {
             };
         };
     };
+    list_my_tips: {
+        parameters: {
+            query?: {
+                /** @description `sent`, `received` or `all` (default). */
+                direction?: string | null;
+                /** @description Only tips in this state. */
+                state?: string | null;
+                /** @description From the previous page's `next_cursor`. */
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipList"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `invalid_query` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     connect_wallet: {
         parameters: {
             query?: never;
@@ -1079,6 +1233,88 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    post_tip_comment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TipCommentRequest"];
+            };
+        };
+        responses: {
+            /** @description Posted; the webhook takes it from here */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostedTipComment"];
+                };
+            };
+            /** @description `unauthenticated` or `github_reauth_required` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `app_not_installed` or `github_forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `invalid_tip` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    receive_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description GitHub login */
+                login: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiveStatus"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
             };
         };
     };

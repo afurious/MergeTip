@@ -56,7 +56,7 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 - [x] 4.5 `notify` crate
 - [x] 4.6 Pledge notifications
 - [x] 4.7 Expiry worker
-- [ ] 4.8 Remaining endpoints
+- [x] 4.8 Remaining endpoints
 - [ ] 4.9 E2E journeys
 - [ ] Handover
 

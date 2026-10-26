@@ -646,6 +646,86 @@ pub async fn advance_email_status(
     Ok(result.rows_affected())
 }
 
+/// Which of a user's tips to list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+    Sent,
+    Received,
+    All,
+}
+
+impl Direction {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Sent => "sent",
+            Self::Received => "received",
+            Self::All => "all",
+        }
+    }
+}
+
+/// One page of the user's tips, newest first, strictly after the `(created_at, id)` keyset
+/// cursor when given. Keyset (not offset) pagination keeps pages stable while new tips arrive:
+/// a row is never repeated or skipped because others were inserted ahead of it.
+pub async fn list_for_user(
+    exec: impl PgExecutor<'_>,
+    user: UserId,
+    direction: Direction,
+    state: Option<TipState>,
+    after: Option<(OffsetDateTime, TipId)>,
+    limit: i64,
+) -> StoreResult<Vec<Tip>> {
+    let (after_at, after_id) = match after {
+        Some((at, id)) => (Some(at), Some(id.as_uuid())),
+        None => (None, None),
+    };
+    sqlx::query_as!(
+        TipRow,
+        r#"
+        SELECT * FROM tips
+        WHERE (($2 = 'sent' AND sender_id = $1)
+               OR ($2 = 'received' AND receiver_id = $1)
+               OR ($2 = 'all' AND (sender_id = $1 OR receiver_id = $1)))
+          AND ($3::text IS NULL OR state = $3)
+          AND ($4::timestamptz IS NULL OR (created_at, id) < ($4, $5::uuid))
+        ORDER BY created_at DESC, id DESC
+        LIMIT $6
+        "#,
+        user.as_uuid(),
+        direction.as_str(),
+        state.map(TipState::as_str),
+        after_at,
+        after_id,
+        limit,
+    )
+    .fetch_all(exec)
+    .await?
+    .into_iter()
+    .map(TryInto::try_into)
+    .collect()
+}
+
+/// The sender's tips that are still waiting on something (no money in flight), locked until
+/// the caller's transaction ends. Used when an account is deleted.
+pub async fn lock_open_by_sender(conn: &mut PgConnection, sender: UserId) -> StoreResult<Vec<Tip>> {
+    sqlx::query_as!(
+        TipRow,
+        r#"
+        SELECT * FROM tips
+        WHERE sender_id = $1
+          AND state IN ('awaiting_sender', 'verifying', 'awaiting_confirmation', 'held', 'pledged')
+        ORDER BY created_at
+        FOR UPDATE
+        "#,
+        sender.as_uuid(),
+    )
+    .fetch_all(conn)
+    .await?
+    .into_iter()
+    .map(TryInto::try_into)
+    .collect()
+}
+
 /// Records the payment hash of the tip's current attempt (each attempt has a fresh invoice).
 /// Not a state change, so it doesn't go through [`transition`].
 pub async fn set_payment_hash(

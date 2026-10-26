@@ -1,11 +1,14 @@
 //! The `Tip` shape every tip-returning endpoint shares (frozen contract, section 0.9).
 
 use mergetip_core::{TipKind, TipState as Core};
+use std::collections::HashMap;
+
+use mergetip_core::UserId;
 use mergetip_store::{
-    tips::Tip as StoredTip,
+    tips::{self, Tip as StoredTip},
     users::{self, User},
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use utoipa::ToSchema;
 
@@ -49,7 +52,7 @@ impl From<Core> for TipState {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TipKindBody {
     Now,
@@ -147,6 +150,120 @@ impl Tip {
         };
         Ok(Self::from_parts(tip, &sender, receiver.as_ref()))
     }
+}
+
+/// A page of the signed-in user's tips.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TipList {
+    pub items: Vec<Tip>,
+    /// Pass back as `cursor` for the next page; `null` on the last page.
+    pub next_cursor: Option<String>,
+}
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct ListQuery {
+    /// `sent`, `received` or `all` (default).
+    direction: Option<String>,
+    /// Only tips in this state.
+    state: Option<String>,
+    /// From the previous page's `next_cursor`.
+    cursor: Option<String>,
+}
+
+/// Tips per page.
+const PAGE_SIZE: usize = 50;
+
+fn invalid_query(message: &'static str) -> ApiError {
+    ApiError::unprocessable("invalid_query", message)
+}
+
+/// `base64url("{created_at unix nanos}:{tip id}")`: opaque to clients, exact for the keyset.
+fn encode_cursor(tip: &StoredTip) -> String {
+    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+    URL_SAFE_NO_PAD.encode(format!(
+        "{}:{}",
+        tip.created_at.unix_timestamp_nanos(),
+        tip.id
+    ))
+}
+
+fn decode_cursor(raw: &str) -> Option<(OffsetDateTime, mergetip_core::TipId)> {
+    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+    let text = String::from_utf8(URL_SAFE_NO_PAD.decode(raw).ok()?).ok()?;
+    let (nanos, id) = text.split_once(':')?;
+    let at = OffsetDateTime::from_unix_timestamp_nanos(nanos.parse().ok()?).ok()?;
+    Some((at, mergetip_core::TipId::from_uuid(id.parse().ok()?)))
+}
+
+/// The signed-in user's tips, newest first, 50 per page.
+#[utoipa::path(
+    get,
+    path = "/v1/me/tips",
+    operation_id = "list_my_tips",
+    tag = "me",
+    params(ListQuery),
+    responses(
+        (status = 200, body = TipList),
+        (status = 401, description = "Not signed in", body = crate::error::ErrorBody),
+        (status = 422, description = "`invalid_query`", body = crate::error::ErrorBody),
+    ),
+    security(("session" = []), ("bearer" = []))
+)]
+pub async fn list_my_tips(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    auth: crate::extract::AuthUser,
+    axum::extract::Query(query): axum::extract::Query<ListQuery>,
+) -> Result<axum::Json<TipList>, ApiError> {
+    let direction = match query.direction.as_deref().unwrap_or("all") {
+        "sent" => tips::Direction::Sent,
+        "received" => tips::Direction::Received,
+        "all" => tips::Direction::All,
+        _ => return Err(invalid_query("direction must be sent, received or all.")),
+    };
+    let filter = query
+        .state
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .map(|s| s.parse::<Core>())
+        .transpose()
+        .map_err(|_| invalid_query("Unknown tip state."))?;
+    let after = query
+        .cursor
+        .as_deref()
+        .filter(|c| !c.is_empty())
+        .map(|c| decode_cursor(c).ok_or_else(|| invalid_query("Invalid cursor.")))
+        .transpose()?;
+
+    let limit = i64::try_from(PAGE_SIZE + 1).unwrap_or(i64::MAX);
+    let mut page =
+        tips::list_for_user(state.pool(), auth.user.id, direction, filter, after, limit).await?;
+    let next_cursor = if page.len() > PAGE_SIZE {
+        page.truncate(PAGE_SIZE);
+        page.last().map(encode_cursor)
+    } else {
+        None
+    };
+
+    let mut ids: Vec<UserId> = page
+        .iter()
+        .flat_map(|t| std::iter::once(t.sender_id).chain(t.receiver_id))
+        .collect();
+    ids.sort();
+    ids.dedup();
+    let people: HashMap<UserId, User> = users::get_many(state.pool(), &ids)
+        .await?
+        .into_iter()
+        .map(|u| (u.id, u))
+        .collect();
+    let items = page
+        .iter()
+        .filter_map(|tip| {
+            let sender = people.get(&tip.sender_id)?;
+            let receiver = tip.receiver_id.and_then(|id| people.get(&id));
+            Some(Tip::from_parts(tip, sender, receiver))
+        })
+        .collect();
+    Ok(axum::Json(TipList { items, next_cursor }))
 }
 
 fn user_ref(user: &User) -> UserRef {

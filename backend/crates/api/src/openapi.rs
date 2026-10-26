@@ -13,12 +13,14 @@ use crate::{
     routes::{
         auth::{self, ExtensionToken},
         claims::{self, ClaimRequest},
+        compose::{self, PostedTipComment, TipCommentRequest},
         confirmations::{self, ConfirmRequest},
         email,
         health::{self, Health},
         me::{self, Caps, Me, WalletStatus},
         settings::{self, AddressRequest, SettingsRequest, WalletRequest},
-        tips::{Tip, TipEnvelope, TipKindBody, TipState, UserRef},
+        tips::{self, Tip, TipEnvelope, TipKindBody, TipList, TipState, UserRef},
+        users::{self, ReceiveMethod, ReceiveStatus},
         webhooks,
     },
 };
@@ -39,6 +41,10 @@ use crate::{
         auth::logout,
         auth::extension_token,
         me::get_me,
+        me::delete_me,
+        tips::list_my_tips,
+        users::receive_status,
+        compose::post_tip_comment,
         settings::connect_wallet,
         settings::disconnect_wallet,
         settings::set_lightning_address,
@@ -71,6 +77,11 @@ use crate::{
         TipEnvelope,
         ClaimRequest,
         ConfirmRequest,
+        TipList,
+        ReceiveStatus,
+        ReceiveMethod,
+        TipCommentRequest,
+        PostedTipComment,
     )),
     modifiers(&SecuritySchemes),
     tags(
@@ -81,6 +92,8 @@ use crate::{
         (name = "claims", description = "Claiming pledged tips"),
         (name = "confirmations", description = "Confirming high-value tips"),
         (name = "email", description = "Email preferences reachable from emails"),
+        (name = "tips", description = "Sending tips from the browser extension"),
+        (name = "users", description = "Other GitHub users"),
     )
 )]
 pub struct ApiDoc;

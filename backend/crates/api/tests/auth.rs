@@ -256,3 +256,50 @@ async fn declined_or_bad_codes_do_not_sign_in(pool: PgPool) -> sqlx::Result<()> 
     assert_eq!(sessions, 0);
     Ok(())
 }
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn a_deleted_account_can_sign_up_again(pool: PgPool) -> sqlx::Result<()> {
+    let gh = github().await;
+    let app = common::app(pool.clone(), &gh.uri());
+    let sign_in = || async {
+        let (oauth_cookie, state) = start(&app, "/dashboard").await;
+        let callback = get(
+            &app,
+            &format!("/v1/auth/github/callback?code=good-code&state={state}"),
+            Some(&oauth_cookie),
+        )
+        .await;
+        set_cookies(&callback)
+            .into_iter()
+            .find(|c| c.starts_with("mt_session="))
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_owned()
+    };
+
+    let session = sign_in().await;
+    let delete = Request::delete("/v1/me")
+        .header(header::COOKIE, &session)
+        .header(header::ORIGIN, WEB)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(delete).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(
+        get(&app, "/v1/me", Some(&session)).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+
+    let again = sign_in().await;
+    let me = get(&app, "/v1/me", Some(&again)).await;
+    assert_eq!(me.status(), StatusCode::OK);
+    let rows = sqlx::query!("SELECT github_login, deleted_at FROM users WHERE github_id = 42")
+        .fetch_all(&pool)
+        .await?;
+    assert_eq!(rows.len(), 1, "the same row, reactivated");
+    assert_eq!(rows[0].github_login, "alice");
+    assert!(rows[0].deleted_at.is_none());
+    Ok(())
+}

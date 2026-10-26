@@ -4,6 +4,7 @@
 //! Every step that changes a tip's state does so in one transaction together with enqueuing the
 //! follow-up jobs, so a crash can never leave a tip in a state with no job to move it on.
 
+pub mod account;
 mod comments;
 pub mod confirm;
 mod error;

@@ -2050,6 +2050,7 @@ dependencies = [
  "mergetip-engine",
  "mergetip-github",
  "mergetip-notify",
+ "mergetip-parser",
  "mergetip-payer",
  "mergetip-runtime",
  "mergetip-store",

@@ -2,12 +2,14 @@
 
 pub(crate) mod auth;
 pub(crate) mod claims;
+pub(crate) mod compose;
 pub(crate) mod confirmations;
 pub(crate) mod email;
 pub(crate) mod health;
 pub(crate) mod me;
 pub(crate) mod settings;
 pub(crate) mod tips;
+pub(crate) mod users;
 pub(crate) mod webhooks;
 
 use std::time::Duration;
@@ -56,7 +58,10 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/github/callback", get(auth::callback))
         .route("/auth/logout", post(auth::logout))
         .route("/auth/extension-token", post(auth::extension_token))
-        .route("/me", get(me::get_me))
+        .route("/me", get(me::get_me).delete(me::delete_me))
+        .route("/me/tips", get(tips::list_my_tips))
+        .route("/users/{login}/receive-status", get(users::receive_status))
+        .route("/tips/comment", post(compose::post_tip_comment))
         .route(
             "/me/wallet",
             put(settings::connect_wallet).delete(settings::disconnect_wallet),

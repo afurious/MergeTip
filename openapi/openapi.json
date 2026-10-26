@@ -713,6 +713,33 @@
             "bearer": []
           }
         ]
+      },
+      "delete": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Delete the account: secrets and personal data are erased and waiting tips are closed. Tip\nrecords stay, anonymised, so replayed webhooks still can't create duplicates.",
+        "operationId": "delete_me",
+        "responses": {
+          "204": {
+            "description": "Deleted and signed out"
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
       }
     },
     "/v1/me/lightning-address": {
@@ -811,6 +838,92 @@
         ]
       }
     },
+    "/v1/me/tips": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "The signed-in user's tips, newest first, 50 per page.",
+        "operationId": "list_my_tips",
+        "parameters": [
+          {
+            "name": "direction",
+            "in": "query",
+            "description": "`sent`, `received` or `all` (default).",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "description": "Only tips in this state.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "From the previous page's `next_cursor`.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TipList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalid_query`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/me/wallet": {
       "put": {
         "tags": [
@@ -867,6 +980,124 @@
         "responses": {
           "204": {
             "description": "Disconnected (or nothing was connected)"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/tips/comment": {
+      "post": {
+        "tags": [
+          "tips"
+        ],
+        "summary": "Post a `/tip` comment on GitHub as the signed-in user.",
+        "operationId": "post_tip_comment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TipCommentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Posted; the webhook takes it from here",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostedTipComment"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated` or `github_reauth_required`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`app_not_installed` or `github_forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalid_tip`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/users/{login}/receive-status": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Whether a GitHub user can receive a tip right now. Unknown users can't, yet.",
+        "operationId": "receive_status",
+        "parameters": [
+          {
+            "name": "login",
+            "in": "path",
+            "description": "GitHub login",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiveStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -1208,6 +1439,39 @@
           }
         }
       },
+      "PostedTipComment": {
+        "type": "object",
+        "required": [
+          "comment_url"
+        ],
+        "properties": {
+          "comment_url": {
+            "type": "string"
+          }
+        }
+      },
+      "ReceiveMethod": {
+        "type": "string",
+        "enum": [
+          "lightning_address",
+          "none"
+        ]
+      },
+      "ReceiveStatus": {
+        "type": "object",
+        "required": [
+          "login",
+          "method"
+        ],
+        "properties": {
+          "login": {
+            "type": "string"
+          },
+          "method": {
+            "$ref": "#/components/schemas/ReceiveMethod"
+          }
+        }
+      },
       "SettingsRequest": {
         "type": "object",
         "properties": {
@@ -1332,6 +1596,50 @@
           }
         }
       },
+      "TipCommentRequest": {
+        "type": "object",
+        "required": [
+          "repo",
+          "thread_number",
+          "receiver",
+          "amount_sats",
+          "kind"
+        ],
+        "properties": {
+          "amount_sats": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "now",
+              "on_merge"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "receiver": {
+            "type": "string",
+            "description": "GitHub login, without `@`."
+          },
+          "repo": {
+            "type": "string",
+            "description": "`owner/name`."
+          },
+          "thread_number": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
       "TipEnvelope": {
         "type": "object",
         "description": "`{ tip }`, the body of the claim and confirmation endpoints.",
@@ -1350,6 +1658,28 @@
           "now",
           "on_merge"
         ]
+      },
+      "TipList": {
+        "type": "object",
+        "description": "A page of the signed-in user's tips.",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Tip"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass back as `cursor` for the next page; `null` on the last page."
+          }
+        }
       },
       "TipState": {
         "type": "string",
@@ -1462,6 +1792,14 @@
     {
       "name": "email",
       "description": "Email preferences reachable from emails"
+    },
+    {
+      "name": "tips",
+      "description": "Sending tips from the browser extension"
+    },
+    {
+      "name": "users",
+      "description": "Other GitHub users"
     }
   ]
 }

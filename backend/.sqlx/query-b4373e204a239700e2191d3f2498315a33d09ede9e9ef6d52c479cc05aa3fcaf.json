@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO wallet_connections\n               (user_id, nwc_uri_ciphertext, wallet_pubkey, relays, methods, encryption)\n           VALUES ($1, '\\x00', 'pk', '{wss://relay}', '{pay_invoice}', 'nip44')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b4373e204a239700e2191d3f2498315a33d09ede9e9ef6d52c479cc05aa3fcaf"
+}
