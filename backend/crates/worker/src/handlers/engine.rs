@@ -105,6 +105,9 @@ engine_handler!(
     |engine, payload| engine.process_bitnob_event(&payload.event_id)
 );
 
+/// How soon a reconciliation that errored is tried again.
+pub const RECONCILE_ERROR_RETRY: std::time::Duration = std::time::Duration::from_secs(300);
+
 /// How often the expiry job runs. Deadlines are checked against the tips' own timestamps, so a
 /// run that comes late still closes exactly the right tips.
 pub const EXPIRY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
@@ -118,11 +121,14 @@ impl JobHandler for ExpireTipsHandler {
         ExpireTips::KIND
     }
 
-    async fn handle(&self, ctx: &JobContext, _job: &Job) -> Result<JobOutcome, JobError> {
-        self.0
-            .expire_tips()
-            .await
-            .map_err(|err| job_error(ctx, err))?;
+    async fn handle(&self, _ctx: &JobContext, _job: &Job) -> Result<JobOutcome, JobError> {
+        // The single recurring expiry job must survive any run's failure (a dead one would stop
+        // every deadline until the next deploy re-seeds it), so errors only skip this run.
+        if let Err(err) = self.0.expire_tips().await {
+            tracing::error!(error = %err, "expiry run failed; trying again next interval");
+            metrics::counter!("jobs_errors_rescheduled_total", "kind" => ExpireTips::KIND)
+                .increment(1);
+        }
         Ok(JobOutcome::Reschedule(EXPIRY_INTERVAL))
     }
 }
@@ -139,11 +145,13 @@ impl JobHandler for PayTipHandler {
 
     async fn handle(&self, ctx: &JobContext, job: &Job) -> Result<JobOutcome, JobError> {
         let payload: PayTip = decode(job)?;
-        self.0
-            .pay_tip(payload.tip_id, job.is_last_attempt())
-            .await
-            .map_err(|err| job_error(ctx, err))?;
-        Ok(JobOutcome::Done)
+        match self.0.pay_tip(payload.tip_id, job.is_last_attempt()).await {
+            Ok(()) => Ok(JobOutcome::Done),
+            // Payments are switched off: wait with a fresh attempt budget, so a long pause
+            // never turns into failed tips.
+            Err(EngineError::Paused { after }) => Ok(JobOutcome::Reschedule(after)),
+            Err(err) => Err(job_error(ctx, err)),
+        }
     }
 }
 
@@ -162,10 +170,21 @@ impl JobHandler for ReconcilePaymentHandler {
             .0
             .reconcile_payment(payload.tip_id, payload.attempt_id)
             .await
-            .map_err(|err| job_error(ctx, err))?
         {
-            ReconcileOutcome::Done => Ok(JobOutcome::Done),
-            ReconcileOutcome::CheckAgainIn(delay) => Ok(JobOutcome::Reschedule(delay)),
+            Ok(ReconcileOutcome::Done) => Ok(JobOutcome::Done),
+            Ok(ReconcileOutcome::CheckAgainIn(delay)) => Ok(JobOutcome::Reschedule(delay)),
+            // Money is in doubt: this job must never be dead-lettered, or the open attempt
+            // would block the tip forever. Keep checking, and be loud about it.
+            Err(err) => {
+                tracing::error!(tip_id = %payload.tip_id, attempt_id = %payload.attempt_id,
+                    error = %err, "reconciliation failed; checking again later");
+                metrics::counter!("jobs_errors_rescheduled_total", "kind" => ReconcilePayment::KIND)
+                    .increment(1);
+                let after = err
+                    .retry_after(ctx.clock.now())
+                    .unwrap_or(RECONCILE_ERROR_RETRY);
+                Ok(JobOutcome::Reschedule(after))
+            }
         }
     }
 }

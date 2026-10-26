@@ -468,7 +468,10 @@ async fn the_kill_switch_holds_payments(pool: PgPool) -> sqlx::Result<()> {
     let tip = w.paying_tip("reviewer", Some(&address), 21).await;
 
     let err = w.engine.pay_tip(tip, false).await.unwrap_err();
-    assert!(matches!(err, EngineError::Retry { .. }), "{err:?}");
+    assert!(matches!(err, EngineError::Paused { .. }), "{err:?}");
+    // M3 review: even on a job's last attempt, a pause never fails the tip.
+    let err = w.engine.pay_tip(tip, true).await.unwrap_err();
+    assert!(matches!(err, EngineError::Paused { .. }), "{err:?}");
     assert_eq!(w.state(tip).await, state("paying", None));
     assert!(w.attempts(tip).await.is_empty());
     Ok(())
@@ -677,5 +680,38 @@ async fn reconciliation_asks_the_wallet_that_paid(pool: PgPool) -> sqlx::Result<
     );
     assert!(second.paid_hashes().is_empty());
     assert_eq!(w.queued(PayTip::KIND).await, 0);
+    Ok(())
+}
+
+/// M3 review: an installation suspended while a payment may be in flight. The open attempt is
+/// reconciled first; the tip is not closed over money that may have moved.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn a_suspension_never_strands_a_payment_in_flight(pool: PgPool) -> sqlx::Result<()> {
+    let mut w = World::new(pool).await;
+    let address = w.address("reviewer");
+    let tip = w
+        .paying_tip("reviewer", Some(&address), behaviour::PAYS_SILENTLY_SATS)
+        .await;
+    w.engine.pay_tip(tip, false).await.unwrap();
+    sqlx::query!("DELETE FROM jobs").execute(&w.pool).await?;
+    sqlx::query!("UPDATE installations SET suspended_at = now()")
+        .execute(&w.pool)
+        .await?;
+
+    // The pay job runs again (a redelivery after a crash), on its last attempt.
+    w.engine.pay_tip(tip, true).await.unwrap();
+    assert_eq!(w.state(tip).await, state("paying", None));
+    assert_eq!(w.queued(ReconcilePayment::KIND).await, 1);
+    let (tip_id, attempt_id) = w.reconcile_job().await;
+    w.engine
+        .reconcile_payment(tip_id, attempt_id)
+        .await
+        .unwrap();
+    assert_eq!(
+        w.state(tip).await,
+        state("paid", None),
+        "the money that moved is recorded"
+    );
+    assert_eq!(w.wallet.paid_hashes().len(), 1);
     Ok(())
 }

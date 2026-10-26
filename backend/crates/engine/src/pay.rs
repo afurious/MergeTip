@@ -64,16 +64,24 @@ impl Engine {
             return self.pay_tip_stub(tip_id).await;
         }
         match self.try_pay(tip_id).await {
+            // A pause is not a failure; the job waits it out.
+            Err(err @ EngineError::Paused { .. }) => Err(err),
             Err(err) if final_attempt && err.is_retryable() => {
                 tracing::warn!(%tip_id, error = %err, "giving up on paying the tip");
                 let tip = tips::get(&self.pool, tip_id).await?;
-                if tip.state == TipState::Paying
-                    && payment_attempts::open_for_tip(&self.pool, tip_id)
-                        .await?
-                        .is_none()
-                {
-                    self.fail_tip(&tip, "payment_failed", Some(err.to_string()))
-                        .await?;
+                if tip.state != TipState::Paying {
+                    return Ok(());
+                }
+                match payment_attempts::open_for_tip(&self.pool, tip_id).await? {
+                    // Money may be in flight: hand it to reconciliation, never just stop.
+                    Some(open) => {
+                        let mut conn = self.pool.acquire().await?;
+                        enqueue_reconcile(&mut conn, &tip, &open, Duration::ZERO).await?;
+                    }
+                    None => {
+                        self.fail_tip(&tip, "payment_failed", Some(err.to_string()))
+                            .await?;
+                    }
                 }
                 Ok(())
             }
@@ -83,8 +91,7 @@ impl Engine {
 
     async fn try_pay(&self, tip_id: TipId) -> Result<(), EngineError> {
         if !feature_flags::is_enabled(&self.pool, feature_flags::PAYMENTS_ENABLED).await? {
-            return Err(EngineError::Retry {
-                reason: "payments are paused".into(),
+            return Err(EngineError::Paused {
                 after: PAUSED_RETRY,
             });
         }
@@ -92,15 +99,16 @@ impl Engine {
         if tip.state != TipState::Paying {
             return Ok(());
         }
-        let installation = installations::get(&self.pool, tip.installation_id).await?;
-        if installation.suspended_at.is_some() {
-            return self.stop_for_suspension(&tip, TipState::Failed).await;
-        }
         // A crash after reserving left an attempt open: reconcile it, never pay a second time.
+        // This comes before anything that could end the tip: money may already have moved.
         if let Some(open) = payment_attempts::open_for_tip(&self.pool, tip_id).await? {
             let mut conn = self.pool.acquire().await?;
             enqueue_reconcile(&mut conn, &tip, &open, Duration::ZERO).await?;
             return Ok(());
+        }
+        let installation = installations::get(&self.pool, tip.installation_id).await?;
+        if installation.suspended_at.is_some() {
+            return self.stop_for_suspension(&tip, TipState::Failed).await;
         }
 
         // 1. Who gets paid, and from which wallet.
