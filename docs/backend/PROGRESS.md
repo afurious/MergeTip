@@ -44,7 +44,7 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 - [x] 3.8 Reconciliation
 - [x] 3.9 Devtools mocks
 - [x] 3.10 Receipts and E2E journey
-- [ ] Handover
+- [x] Handover
 
 ## M4: Edge flows and notifications
 
