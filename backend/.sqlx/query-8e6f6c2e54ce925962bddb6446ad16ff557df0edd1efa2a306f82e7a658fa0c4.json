@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET email_ciphertext = $2 WHERE id = $1 AND email_ciphertext = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8e6f6c2e54ce925962bddb6446ad16ff557df0edd1efa2a306f82e7a658fa0c4"
+}

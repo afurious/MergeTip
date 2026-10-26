@@ -15,6 +15,7 @@ pub mod observability;
 pub mod otp_codes;
 pub mod payment_attempts;
 pub mod payout_methods;
+pub mod rewrap;
 pub mod sent_replies;
 pub mod sessions;
 pub mod tips;

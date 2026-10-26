@@ -2,7 +2,32 @@
 
 Rust services for MergeTip: the HTTP API (`mergetip-api`) and the job runner
 (`mergetip-worker`), backed by Postgres. See [ADR 0002](../adr/0002-backend-layering.md) for how
-the crates fit together and [RFC 0001](../rfcs/0001-data-model.md) for the schema.
+the crates fit together, and the RFCs for each area: [0001 data model](../rfcs/0001-data-model.md),
+[0002 payments](../rfcs/0002-payments.md), [0003 pledges, confirmations and
+notifications](../rfcs/0003-pledges-confirmations-notifications.md), [0004 fiat
+payouts](../rfcs/0004-fiat-payouts.md).
+
+## Architecture in one picture
+
+```
+GitHub ──signed webhook──▶ api ──store + enqueue (one tx)──▶ Postgres ◀──claim (SKIP LOCKED)── worker
+web app / extension ──REST──▶ api                                                          │
+                                                                                            ├─ GitHub App (verify, reply)
+                                                                                            ├─ LNURL (receiver invoice)
+                                                                                            ├─ NWC over Nostr (sender's wallet pays)
+                                                                                            ├─ Bitnob (fiat payouts, flag-gated)
+                                                                                            └─ Resend / SMTP (pledge emails)
+```
+
+- The api only validates, stores and queues; every side effect runs in the worker, from jobs
+  committed in the same transaction as the state change that needs them.
+- `store::tips::transition` is the only writer of `tips.state` (a compare-and-set plus an audit
+  row in `tip_events`); a test fails if any other SQL writes it.
+- Money moves only from `paying`, through one open `payment_attempts` row at a time; a
+  timed-out payment is reconciled with the wallet, never retried blindly. MergeTip holds no
+  funds: the sender's own wallet pays the receiver (or Bitnob, for fiat).
+- Secrets are envelope-encrypted per value (AAD `"{table}.{column}:{id}"`), `Redacted` in memory,
+  and never logged (`e2e/tests/log_scan.rs` proves it).
 
 ## Prerequisites
 
@@ -68,23 +93,64 @@ startup and exits with the name of any missing or invalid variable.
 
 | Variable | Used by | Purpose |
 | --- | --- | --- |
-| `APP_ENV` | both | `dev`, `staging` or `production`; JSON logs outside `dev` |
+| `APP_ENV` | both | `dev`, `staging` or `production`; JSON logs outside `dev`; production refuses unsafe settings |
 | `DATABASE_URL` | both | Postgres connection string |
 | `MASTER_KEY` / `MASTER_KEY_PREVIOUS` | both | Envelope encryption key (32-byte hex) and the old key during rotation |
 | `API_ADDR` | api | Listen address |
-| `PUBLIC_BASE_URL` | api | Web app origin: the CORS origin and the base for links |
+| `PUBLIC_BASE_URL` | both | Web app origin: the CORS origin and the base for links in replies and emails |
+| `API_PUBLIC_URL` | both | This API's origin: OAuth callback, unsubscribe and Bitnob callback links |
+| `EXTENSION_ORIGINS` | api | Browser-extension origins allowed to make cookie-authenticated writes |
+| `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_PATH` | worker | The GitHub App (installation tokens) |
+| `GITHUB_WEBHOOK_SECRET` | api | Webhook signature secret |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | api | Sign in with GitHub |
+| `GITHUB_API_URL`, `GITHUB_OAUTH_URL` | both | Overrides for GitHub Enterprise or a mock |
+| `LIGHTNING_NETWORK` | both | `bitcoin` in production, `regtest` with the local mocks |
+| `STUB_PAYER` | worker | Staging demos without wallets; refused in production |
 | `WORKER_CONCURRENCY` | worker | Jobs run in parallel per process |
+| `RESEND_API_KEY`, `SMTP_URL`, `EMAIL_FROM` | both | Email: Resend, else SMTP (dev only), else none |
+| `RESEND_WEBHOOK_SECRET` | api | Resend delivery events (Svix); unset disables the endpoint |
+| `FIAT_PAYOUTS_ENABLED`, `BITNOB_BASE_URL`, `BITNOB_CLIENT_ID`, `BITNOB_SECRET` | both | Fiat payouts (the `fiat_payouts` flag row must be on too) |
+| `BITNOB_WEBHOOK_SECRET` | api | Bitnob payout events |
+| `METRICS_ADDR` | both | Prometheus `/metrics` on an internal address |
+| `SENTRY_DSN` | both | Error reporting |
 | `RUST_LOG` | both | Log filter |
+
+Runtime switches live in the `feature_flags` table: `payments_enabled` (the SEV1 kill switch),
+`fiat_payouts`, `email_from_commits`.
 
 ## Where things live
 
 | Path | What |
 | --- | --- |
 | `crates/core` | Tip states and transitions, `Sats`/`Msats`, typed IDs, `Clock` |
-| `crates/crypto` | `Keyring` envelope encryption, `Redacted<T>`, webhook signature check, tokens |
+| `crates/crypto` | `Keyring` envelope encryption, `Redacted<T>`, webhook signatures, tokens |
+| `crates/parser` | The `/tip` grammar |
+| `crates/github` | GitHub App client, OAuth, verifier, bot reply templates |
+| `crates/payer` | LNURL resolution, invoice checks, NWC wallet client, test mocks |
+| `crates/fiat` | Bitnob Payouts client and webhook signatures |
+| `crates/notify` | `Mailer` (Resend, SMTP), email templates, unsubscribe tokens |
+| `crates/engine` | Every use case: comments, verification, payment, holds, pledges, confirmations, expiry, notices, payouts, operator actions |
 | `crates/store` | Repositories, `tips::transition`, the job queue |
-| `crates/runtime` | Config helpers, tracing, database pool, shutdown signal |
-| `crates/worker` | `Runner` and job handlers |
-| `crates/api` | Router, middleware, error contract, OpenAPI |
+| `crates/runtime` | Config, tracing and Sentry, metrics exporter, database pool, shutdown |
+| `crates/worker` | `Runner`, job handlers, metrics sampler, `ops` commands |
+| `crates/api` | Router, auth, rate limits and headers, error contract, OpenAPI |
+| `crates/e2e` | The real api and worker against Postgres with faked GitHub, LNURL and wallet |
+| `devtools/` | `mock-nwc` and `mock-lnurl` for running everything offline |
 | `migrations/` | SQL migrations |
 | `.sqlx/` | Offline query metadata for `sqlx` macros |
+
+## Operate it
+
+- **Health:** `GET /healthz` (plain `ok`, for Fly checks) and `GET /v1/health`.
+- **Metrics and alerts:** `/metrics` on `METRICS_ADDR` (internal); every alert in
+  [`deploy/observability/alerts.yml`](../../deploy/observability/alerts.yml) names its runbook.
+- **Runbooks:** [`docs/runbooks/`](../runbooks/README.md).
+- **Operator commands** (on a worker machine, `fly ssh console -a mergetip-worker-production`,
+  where the binary is `/app`; locally `cargo run -p mergetip-worker --`):
+  - `/app ops fiat-retry <tip> --operator <name>`
+  - `/app ops fiat-refund <tip> --bolt11 <invoice> --operator <name>`
+  - `/app ops rewrap --operator <name>`
+- **Migrations:** `mergetip-api migrate` (Fly runs it as the api's `release_command`).
+- **Critical tests:** [`critical-tests.md`](critical-tests.md); coverage floors via `make coverage`.
+- **Deploys:** pushes to `main` deploy staging; `v*` tags deploy production after approval
+  (`.github/workflows/deploy-*.yml`).

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET github_token_ciphertext = $2 WHERE id = $1 AND github_token_ciphertext = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "00fb29884f8f4749b13b45df8a4ee5eaaaf3c90187ee088596298cf720a86eb9"
+}

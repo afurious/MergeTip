@@ -36,7 +36,8 @@ delivered, or refund the sender over Lightning.
 
 ## Fix
 
-Run from a worker machine (`fly ssh console -a mergetip-worker-production`), with your name as
+Run on a worker machine (`fly ssh console -a mergetip-worker-production`; the worker binary is
+`/app` in the image), with your name as
 the operator. Every command is recorded in the tip's audit trail.
 
 ### A. Bitnob delivered after all, or delivery can be retried
@@ -45,7 +46,7 @@ the operator. Every command is recorded in the tip's audit trail.
 2. Reopen the tip and re-poll Bitnob:
 
    ```sh
-   mergetip-worker ops fiat-retry <tip_id> --operator <your-name>
+   /app ops fiat-retry <tip_id> --operator <your-name>
    ```
 
    The log line `operator action done` shows the result: `paid` (the receipt is posted in the
@@ -60,7 +61,7 @@ the operator. Every command is recorded in the tip's audit trail.
 3. Record the refund:
 
    ```sh
-   mergetip-worker ops fiat-refund <tip_id> --bolt11 <invoice> --operator <your-name>
+   /app ops fiat-refund <tip_id> --bolt11 <invoice> --operator <your-name>
    ```
 
    The command refuses an invoice for any other amount or network.

@@ -41,6 +41,12 @@ pub enum OpsCommand {
         #[arg(long, env = "MERGETIP_OPERATOR")]
         operator: String,
     },
+    /// After rotating `MASTER_KEY` (old key in `MASTER_KEY_PREVIOUS`), re-wrap every encrypted
+    /// value under the new key. Safe to repeat; run until it reports 0 re-wrapped.
+    Rewrap {
+        #[arg(long, env = "MERGETIP_OPERATOR")]
+        operator: String,
+    },
 }
 
 #[cfg(test)]

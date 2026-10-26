@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE payout_methods SET beneficiary_ciphertext = $2\n             WHERE id = $1 AND beneficiary_ciphertext = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3f1198386d89e755dc1fb366f59b832e1bea5827fff939aca195266818837ee5"
+}

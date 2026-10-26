@@ -29,18 +29,20 @@ async fn main() -> anyhow::Result<()> {
         config.app_env,
         config.sentry_dsn.as_ref().map(|dsn| dsn.expose().as_str()),
     );
-    if let Some(addr) = config.metrics_addr {
-        mergetip_runtime::metrics::install(addr).context("cannot start the metrics exporter")?;
-    }
-
     let pool = db::connect(config.database_url.expose(), config.pool_size())
         .await
         .context("cannot connect to the database")?;
-    db::migrate(&pool).await.context("migrations failed")?;
 
+    // Operator commands run next to a live worker (`fly ssh console`): they must not bind its
+    // metrics port or run migrations (the api's release command owns those).
     if let Some(Command::Ops(command)) = cli.command {
         return run_ops(&pool, &config, command).await;
     }
+
+    if let Some(addr) = config.metrics_addr {
+        mergetip_runtime::metrics::install(addr).context("cannot start the metrics exporter")?;
+    }
+    db::migrate(&pool).await.context("migrations failed")?;
 
     let key_path = &config.github.private_key_path;
     let private_key = std::fs::read(key_path)
@@ -122,13 +124,13 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// One operator action, then exit. Prints the tip's new state for the runbook's check step.
+/// One operator action, then exit. Logs the outcome for the runbook's check step.
 async fn run_ops(
     pool: &mergetip_store::PgPool,
     config: &WorkerConfig,
     command: OpsCommand,
 ) -> anyhow::Result<()> {
-    let state = match command {
+    match command {
         OpsCommand::FiatRetry { tip_id, operator } => {
             let bitnob = config
                 .bitnob
@@ -136,15 +138,21 @@ async fn run_ops(
                 .context("FIAT_PAYOUTS_ENABLED and the Bitnob credentials are needed to re-poll")?;
             let provider = mergetip_fiat::BitnobClient::new(bitnob)
                 .context("cannot set up the Bitnob client")?;
-            mergetip_engine::ops::fiat_retry(pool, &provider, TipId::from_uuid(tip_id), &operator)
-                .await?
+            let state = mergetip_engine::ops::fiat_retry(
+                pool,
+                &provider,
+                TipId::from_uuid(tip_id),
+                &operator,
+            )
+            .await?;
+            tracing::info!(%state, "operator action done");
         }
         OpsCommand::FiatRefund {
             tip_id,
             bolt11,
             operator,
         } => {
-            mergetip_engine::ops::fiat_refund(
+            let state = mergetip_engine::ops::fiat_refund(
                 pool,
                 TipId::from_uuid(tip_id),
                 &bolt11,
@@ -152,9 +160,17 @@ async fn run_ops(
                 &operator,
                 time::OffsetDateTime::now_utc(),
             )
-            .await?
+            .await?;
+            tracing::info!(%state, "operator action done");
         }
-    };
-    tracing::info!(%state, "operator action done");
+        OpsCommand::Rewrap { operator } => {
+            let report = mergetip_engine::ops::rewrap(pool, &config.keyring, &operator).await?;
+            anyhow::ensure!(
+                report.failed == 0,
+                "{} value(s) open with neither master key; see the log",
+                report.failed
+            );
+        }
+    }
     Ok(())
 }
