@@ -9,4 +9,4 @@ mod token;
 pub use envelope::{EnvelopeError, KeyError, Keyring};
 pub use mac::{SignatureError, hmac_sha256, verify_github_signature};
 pub use redacted::Redacted;
-pub use token::{RandomError, Token, hash_token, random_bytes, random_token};
+pub use token::{RandomError, Token, constant_time_eq, hash_token, random_bytes, random_token};

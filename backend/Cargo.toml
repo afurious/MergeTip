@@ -31,7 +31,7 @@ tokio-util = "0.7"
 axum = "0.8"
 tower-http = { version = "0.7", features = ["trace", "limit", "cors", "timeout", "request-id", "sensitive-headers"] }
 tower = { version = "0.5", features = ["util"] }
-reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "form", "rustls"] }
 
 # serialization / errors / ids
 serde = { version = "1", features = ["derive"] }
@@ -57,10 +57,9 @@ utoipa = { version = "6", features = ["axum_extras", "uuid", "time"] }
 # integrations
 octocrab = "0.54"
 nostr-sdk = "0.45"
-nwc = "0.45"
-lnurl-rs = "0.10"
-# lnurl-rs 0.10 needs secp256k1 rand std features enabled transitively
-bitcoin = { version = "0.32", features = ["rand-std"] }
+nostr = { version = "0.45", features = ["nip47"] }
+# Only for its re-exported secp256k1, to sign invoices in tests and the local mocks.
+bitcoin = { version = "0.32", default-features = false, features = ["std", "secp-recovery"] }
 lightning-invoice = "0.34"
 
 # crypto
@@ -72,11 +71,13 @@ sha2 = "0.11"
 hex = "0.4"
 base64 = "0.22"
 getrandom = "0.4"
+subtle = "2"
 
 # testing
 proptest = "1"
 insta = "1"
 wiremock = "0.6"
+futures = "0.3"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

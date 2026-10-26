@@ -11,10 +11,17 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
-tokio.workspace = true
+mergetip-core.workspace = true
+mergetip-payer = { workspace = true, features = ["testing"] }
+anyhow.workspace = true
 axum.workspace = true
+hex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-anyhow.workspace = true
+time.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tower.workspace = true

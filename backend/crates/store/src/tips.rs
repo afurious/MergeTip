@@ -382,6 +382,23 @@ pub async fn count_for_pair_in_thread(
     Ok(count)
 }
 
+/// Records the payment hash of the tip's current attempt (each attempt has a fresh invoice).
+/// Not a state change, so it doesn't go through [`transition`].
+pub async fn set_payment_hash(
+    exec: impl PgExecutor<'_>,
+    id: TipId,
+    payment_hash: &str,
+) -> StoreResult<()> {
+    sqlx::query!(
+        "UPDATE tips SET payment_hash = $2 WHERE id = $1",
+        id.as_uuid(),
+        payment_hash,
+    )
+    .execute(exec)
+    .await?;
+    Ok(())
+}
+
 /// The audit trail for one tip, oldest first.
 pub async fn events(exec: impl PgExecutor<'_>, id: TipId) -> StoreResult<Vec<TipEvent>> {
     let rows = sqlx::query!(

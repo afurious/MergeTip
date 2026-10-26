@@ -16,11 +16,14 @@ mergetip-core.workspace = true
 mergetip-crypto.workspace = true
 mergetip-engine.workspace = true
 mergetip-github.workspace = true
+mergetip-payer = { workspace = true, features = ["testing"] }
 mergetip-store.workspace = true
 mergetip-worker.workspace = true
 axum.workspace = true
 hex.workspace = true
+nostr-sdk = { workspace = true, features = ["local-relay"] }
 serde_json.workspace = true
+sha2.workspace = true
 sqlx.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true

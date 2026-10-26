@@ -17,6 +17,8 @@ pub struct WorkerConfig {
     pub web_base_url: String,
     /// Pay tips with a fake proof (staging demos only). Refused in production.
     pub stub_payer: bool,
+    /// The Lightning network invoices must be for (`bitcoin` in production).
+    pub lightning_network: mergetip_payer::Network,
 }
 
 #[derive(Debug, Clone)]
@@ -80,6 +82,8 @@ impl WorkerConfig {
                 .trim_end_matches('/')
                 .to_owned(),
             stub_payer,
+            lightning_network: env
+                .parse_or("LIGHTNING_NETWORK", mergetip_payer::Network::Bitcoin)?,
         })
     }
 

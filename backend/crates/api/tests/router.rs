@@ -1,37 +1,16 @@
-use std::{collections::HashMap, sync::Arc};
+mod common;
 
 use axum::{
-    Router,
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
     response::Response,
 };
-use mergetip_api::{ApiConfig, AppState, router};
-use mergetip_core::SystemClock;
-use mergetip_store::PgPool;
+use common::WEB;
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
-const WEB: &str = "http://localhost:5173";
-
-fn app() -> Router {
-    let env = HashMap::from([
-        (
-            "MASTER_KEY",
-            "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-        ),
-        ("DATABASE_URL", "postgres://unused/db"),
-        ("PUBLIC_BASE_URL", WEB),
-        ("GITHUB_WEBHOOK_SECRET", "test-secret"),
-    ]);
-    let config = Arc::new(ApiConfig::from_env(&env).unwrap());
-    // These routes never touch the database; a lazy pool never connects.
-    let pool = PgPool::connect_lazy("postgres://unused/db").unwrap();
-    router(AppState::new(pool, config, Arc::new(SystemClock)))
-}
-
 async fn send(request: Request<Body>) -> Response {
-    app().oneshot(request).await.unwrap()
+    common::offline_app().oneshot(request).await.unwrap()
 }
 
 async fn json_body(response: Response) -> Value {

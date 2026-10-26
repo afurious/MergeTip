@@ -1,32 +1,14 @@
-use std::{collections::HashMap, sync::Arc};
+mod common;
 
 use axum::{
-    Router,
     body::{Body, to_bytes},
     http::{Request, StatusCode},
     response::Response,
 };
-use mergetip_api::{ApiConfig, AppState, router};
-use mergetip_core::SystemClock;
+use common::WEBHOOK_SECRET as SECRET;
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use tower::ServiceExt;
-
-const SECRET: &str = "test-secret";
-
-fn app(pool: PgPool) -> Router {
-    let env = HashMap::from([
-        (
-            "MASTER_KEY",
-            "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-        ),
-        ("DATABASE_URL", "postgres://unused/db"),
-        ("PUBLIC_BASE_URL", "http://localhost:5173"),
-        ("GITHUB_WEBHOOK_SECRET", SECRET),
-    ]);
-    let config = Arc::new(ApiConfig::from_env(&env).unwrap());
-    router(AppState::new(pool, config, Arc::new(SystemClock)))
-}
 
 fn sign(body: &[u8]) -> String {
     format!(
@@ -47,7 +29,10 @@ fn delivery(id: &str, body: &[u8], signature: Option<String>) -> Request<Body> {
 }
 
 async fn send(pool: &PgPool, request: Request<Body>) -> Response {
-    app(pool.clone()).oneshot(request).await.unwrap()
+    common::app(pool.clone(), "http://127.0.0.1:9")
+        .oneshot(request)
+        .await
+        .unwrap()
 }
 
 async fn error_code(response: Response) -> Value {

@@ -5,10 +5,13 @@
 
 pub mod bot_comments;
 mod error;
+pub mod feature_flags;
 pub mod github_events;
 pub mod installations;
 pub mod jobs;
+pub mod payment_attempts;
 pub mod sent_replies;
+pub mod sessions;
 pub mod tips;
 pub mod users;
 pub mod wallets;

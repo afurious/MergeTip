@@ -4,8 +4,10 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use mergetip_api::{ApiConfig, AppState, openapi, router};
+use mergetip_api::{ApiConfig, AppState, Services, openapi, router};
 use mergetip_core::SystemClock;
+use mergetip_github::oauth::OAuthClient;
+use mergetip_payer::{LnurlClient, nwc::NwcConnector};
 use mergetip_runtime::{config::ProcessEnv, db, shutdown, telemetry};
 
 #[derive(Debug, Parser)]
@@ -42,7 +44,26 @@ async fn serve() -> anyhow::Result<()> {
     let pool = db::connect(config.database_url.expose(), 10)
         .await
         .context("cannot connect to the database")?;
-    let state = AppState::new(pool, config.clone(), Arc::new(SystemClock));
+    let oauth = OAuthClient::new(
+        config.github_client_id.clone(),
+        config.github_client_secret.clone(),
+        &config.github_oauth_url,
+        &config.github_api_url,
+    )
+    .context("cannot set up GitHub sign-in")?;
+    let clock = Arc::new(SystemClock);
+    let receivers = LnurlClient::new(
+        config.lightning_network,
+        config.app_env.is_dev(),
+        clock.clone(),
+    )
+    .context("cannot set up the LNURL client")?;
+    let services = Services {
+        oauth: Arc::new(oauth),
+        wallets: Arc::new(NwcConnector),
+        receivers: Arc::new(receivers),
+    };
+    let state = AppState::new(pool, config.clone(), clock, services);
 
     let listener = tokio::net::TcpListener::bind(config.addr)
         .await

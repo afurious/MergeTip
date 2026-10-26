@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT github_token_ciphertext, github_refresh_token_ciphertext, github_token_expires_at,\n               email_ciphertext, email_source\n        FROM users WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "github_token_ciphertext",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "github_token_ciphertext"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "github_refresh_token_ciphertext",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "github_refresh_token_ciphertext"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "github_token_expires_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "github_token_expires_at"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "email_ciphertext",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "email_ciphertext"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "email_source",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "email_source"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "7114774aa31eb359cfaa6716bcc64046b8a629a54a64b958fc871b1c473d14ce"
+}

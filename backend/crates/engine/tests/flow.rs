@@ -3,11 +3,13 @@
 use std::{sync::Arc, time::Duration};
 
 use mergetip_core::SystemClock;
+use mergetip_crypto::Keyring;
 use mergetip_engine::{
-    Engine, EngineSettings,
+    Engine, EngineSettings, Payments,
     jobs::{JobPayload, PayTip, PostReply, ProcessEvent, VerifyTip},
 };
 use mergetip_github::{Issue, PullRequest, Reaction, Review, testing::FakeGitHub};
+use mergetip_payer::{LnurlClient, Network, nwc::NwcConnector};
 use mergetip_store::{github_events, jobs};
 use serde_json::{Value, json};
 use sqlx::PgPool;
@@ -62,9 +64,13 @@ impl Harness {
             pool.clone(),
             github.clone(),
             Arc::new(SystemClock),
-            EngineSettings {
-                web_base_url: "https://mergetip.dev".into(),
-                stub_payer,
+            EngineSettings::new("https://mergetip.dev", stub_payer),
+            Payments {
+                receivers: Arc::new(
+                    LnurlClient::new(Network::Regtest, true, Arc::new(SystemClock)).unwrap(),
+                ),
+                wallets: Arc::new(NwcConnector),
+                keyring: Arc::new(Keyring::from_hex(&"07".repeat(32), None).unwrap()),
             },
         );
         Self {
@@ -164,7 +170,7 @@ impl Harness {
                 }
                 PayTip::KIND => {
                     self.engine
-                        .pay_tip_stub(PayTip::decode(&job.payload).unwrap().tip_id)
+                        .pay_tip(PayTip::decode(&job.payload).unwrap().tip_id, false)
                         .await
                 }
                 PostReply::KIND => {

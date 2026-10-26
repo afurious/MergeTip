@@ -23,21 +23,29 @@ services:
       - "1025:1025" # SMTP
       - "8025:8025" # web UI
 
+  # Mock wallet: prints a nostr+walletconnect:// URI to paste into the web app. It pays invoices
+  # from mock-lnurl because both share MOCK_SEED. Fixed keys keep the URI stable across restarts.
   mock-nwc:
     build:
       context: ./backend
       args: { BIN: mock-nwc }
     environment:
       RELAY_URL: ws://relay:8080
+      PUBLIC_RELAY_URL: ws://localhost:7000
+      MOCK_SEED: ${MOCK_SEED:-6d657267657469702d6c6f63616c2d6d6f636b2d736565642d30303030303030}
+      MOCK_NWC_WALLET_SECRET: ${MOCK_NWC_WALLET_SECRET:-}
+      MOCK_NWC_APP_SECRET: ${MOCK_NWC_APP_SECRET:-}
       RUST_LOG: info
     depends_on: [relay]
 
+  # Mock Lightning addresses: any user@localhost:8090 (wrongamount, expired, badhash, down misbehave).
   mock-lnurl:
     build:
       context: ./backend
       args: { BIN: mock-lnurl }
     environment:
       MOCK_LNURL_ADDR: 0.0.0.0:8090
+      MOCK_SEED: ${MOCK_SEED:-6d657267657469702d6c6f63616c2d6d6f636b2d736565642d30303030303030}
       RUST_LOG: info
     ports: ["8090:8090"]
 

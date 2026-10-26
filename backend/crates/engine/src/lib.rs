@@ -15,10 +15,13 @@ mod verify;
 use std::sync::Arc;
 
 use mergetip_core::Clock;
+use mergetip_crypto::Keyring;
 use mergetip_github::GitHubApi;
+use mergetip_payer::{ReceiverEndpoint, WalletConnector};
 use mergetip_store::PgPool;
 
 pub use error::EngineError;
+pub use pay::{MAX_PAYMENT_ATTEMPTS, PAY_TIMEOUT, ReconcileOutcome};
 pub use verify::{Decision, decide};
 
 /// Tips a sender may create per rolling hour (PRD "Limits").
@@ -33,6 +36,26 @@ pub struct EngineSettings {
     /// Staging only: pay tips with a fake proof instead of a wallet, and treat every sender as
     /// having a wallet. Configuration refuses it in production.
     pub stub_payer: bool,
+    /// How long the sender's wallet gets to pay before the outcome counts as unknown.
+    pub pay_timeout: std::time::Duration,
+}
+
+impl EngineSettings {
+    pub fn new(web_base_url: impl Into<String>, stub_payer: bool) -> Self {
+        Self {
+            web_base_url: web_base_url.into(),
+            stub_payer,
+            pay_timeout: pay::PAY_TIMEOUT,
+        }
+    }
+}
+
+/// What paying needs: the receiver side (LNURL), the sender side (NWC) and the keyring that
+/// decrypts NWC URIs. Only the worker builds an engine with a real keyring.
+pub struct Payments {
+    pub receivers: Arc<dyn ReceiverEndpoint>,
+    pub wallets: Arc<dyn WalletConnector>,
+    pub keyring: Arc<Keyring>,
 }
 
 pub struct Engine {
@@ -40,6 +63,7 @@ pub struct Engine {
     github: Arc<dyn GitHubApi>,
     clock: Arc<dyn Clock>,
     settings: EngineSettings,
+    payments: Payments,
 }
 
 impl std::fmt::Debug for Engine {
@@ -56,12 +80,14 @@ impl Engine {
         github: Arc<dyn GitHubApi>,
         clock: Arc<dyn Clock>,
         settings: EngineSettings,
+        payments: Payments,
     ) -> Self {
         Self {
             pool,
             github,
             clock,
             settings,
+            payments,
         }
     }
 

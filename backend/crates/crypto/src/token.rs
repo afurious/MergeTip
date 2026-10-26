@@ -39,9 +39,24 @@ pub fn hash_token(raw: &str) -> String {
     hex::encode(Sha256::digest(raw.as_bytes()))
 }
 
+/// Compares two secrets in time independent of where they differ, so an attacker can't learn a
+/// value byte by byte from response timings.
+pub fn constant_time_eq(a: &str, b: &str) -> bool {
+    use subtle::ConstantTimeEq;
+    a.len() == b.len() && bool::from(a.as_bytes().ct_eq(b.as_bytes()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn constant_time_eq_compares_whole_values() {
+        assert!(constant_time_eq("state-abc", "state-abc"));
+        assert!(!constant_time_eq("state-abc", "state-abd"));
+        assert!(!constant_time_eq("state-abc", "state-ab"));
+        assert!(!constant_time_eq("", "x"));
+    }
 
     #[test]
     fn tokens_are_unique_url_safe_and_hashed() {

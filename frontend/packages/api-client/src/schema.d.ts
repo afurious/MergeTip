@@ -25,6 +25,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/extension-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mint a bearer token for the browser extension. */
+        post: operations["create_extension_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/github/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GitHub's redirect back after sign-in: create the session and return to the web app. */
+        get: operations["github_callback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/github/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Start signing in: redirect to GitHub. */
+        get: operations["github_login"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign out of this browser. */
+        post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/health": {
         parameters: {
             query?: never;
@@ -37,6 +105,75 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in user. */
+        get: operations["get_me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/lightning-address": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Link the receiver's Lightning address, after checking it resolves. */
+        put: operations["set_lightning_address"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change limits and preferences. Omitted fields are unchanged. */
+        patch: operations["update_settings"];
+        trace?: never;
+    };
+    "/v1/me/wallet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Connect (or replace) the sender's wallet. */
+        put: operations["connect_wallet"];
+        post?: never;
+        /** Disconnect the sender's wallet. */
+        delete: operations["disconnect_wallet"];
         options?: never;
         head?: never;
         patch?: never;
@@ -63,6 +200,21 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AddressRequest: {
+            /** @description A Lightning address such as `alice@getalby.com`. */
+            address: string;
+        };
+        Caps: {
+            /** Format: int64 */
+            daily_max_sats: number;
+            /** Format: int64 */
+            per_tip_max_sats: number;
+            /**
+             * Format: int64
+             * @description Sats paid or in flight since midnight UTC.
+             */
+            spent_today_sats: number;
+        };
         ErrorBody: {
             error: components["schemas"]["ErrorDetail"];
         };
@@ -71,11 +223,53 @@ export interface components {
             code: string;
             message: string;
         };
+        ExtensionToken: {
+            /** Format: date-time */
+            expires_at: string;
+            /** @description Send as `Authorization: Bearer <token>`. */
+            token: string;
+        };
         Health: {
             /** @description Always `ok` when the process can serve requests. */
             status: string;
             /** @description The running build's version. */
             version: string;
+        };
+        Me: {
+            avatar_url: string;
+            caps: components["schemas"]["Caps"];
+            confirm_otp_enabled: boolean;
+            /** Format: int64 */
+            confirm_threshold_sats: number;
+            email?: string | null;
+            email_opt_out: boolean;
+            github_login: string;
+            id: string;
+            lightning_address?: string | null;
+            wallet: components["schemas"]["WalletStatus"];
+        };
+        SettingsRequest: {
+            confirm_otp_enabled?: boolean | null;
+            /** Format: int64 */
+            confirm_threshold_sats?: number | null;
+            /** Format: int64 */
+            daily_max_sats?: number | null;
+            email_opt_out?: boolean | null;
+            /** Format: int64 */
+            per_tip_max_sats?: number | null;
+        };
+        WalletRequest: {
+            /**
+             * @description `nostr+walletconnect://…`. Treated as a password: never stored in plain text, logged or
+             *     returned.
+             */
+            nwc_uri: string;
+        };
+        WalletStatus: {
+            connected: boolean;
+            /** @description NIP-47 methods the wallet granted, e.g. `pay_invoice`. */
+            methods: string[];
+            relay?: string | null;
         };
     };
     responses: never;
@@ -106,6 +300,96 @@ export interface operations {
             };
         };
     };
+    create_extension_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtensionToken"];
+                };
+            };
+        };
+    };
+    github_callback: {
+        parameters: {
+            query?: {
+                code?: string | null;
+                state?: string | null;
+                /** @description Set by GitHub when the user declined. */
+                error?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed in; redirect to the web app with the session cookie set */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description State mismatch or missing code */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    github_login: {
+        parameters: {
+            query?: {
+                /** @description Web app path to return to after signing in, e.g. `/claim/abc`. Defaults to `/dashboard`. */
+                redirect?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to GitHub */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed out */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     health: {
         parameters: {
             query?: never;
@@ -123,6 +407,148 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Health"];
                 };
+            };
+        };
+    };
+    get_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    set_lightning_address: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddressRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description `lnurl_invalid` or `lnurl_unreachable` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettingsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description `invalid_setting` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    connect_wallet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description `nwc_invalid_uri`, `nwc_unreachable` or `nwc_missing_pay_invoice` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    disconnect_wallet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disconnected (or nothing was connected) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

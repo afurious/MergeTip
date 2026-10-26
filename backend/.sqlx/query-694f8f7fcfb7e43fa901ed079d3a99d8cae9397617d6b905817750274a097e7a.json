@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE users SET\n            github_token_ciphertext = $2,\n            github_refresh_token_ciphertext = COALESCE($3, github_refresh_token_ciphertext),\n            github_token_expires_at = $4\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Bytea",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "694f8f7fcfb7e43fa901ed079d3a99d8cae9397617d6b905817750274a097e7a"
+}

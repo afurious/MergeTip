@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE users SET\n            per_tip_max_sats = COALESCE($2, per_tip_max_sats),\n            daily_max_sats = COALESCE($3, daily_max_sats),\n            confirm_threshold_sats = COALESCE($4, confirm_threshold_sats),\n            confirm_otp_enabled = COALESCE($5, confirm_otp_enabled),\n            email_opt_out = COALESCE($6, email_opt_out)\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d18f9d20ade6ce2369b6232ecb1409588cbd51b5dca207f2c2bb003ad9afe48c"
+}

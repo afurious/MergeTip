@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET daily_max_sats = 3000 WHERE github_login = 'maintainer'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "5e88aa392e6dcaca2b90d7224032ac93a8a8fa8bad5758b998936a7d0248b99e"
+}

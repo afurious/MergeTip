@@ -64,6 +64,7 @@ pub fn needs_confirmation(tip: &TipContext<'_>, threshold: Sats, link: &str) -> 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Limits {
     pub per_tip_max: Sats,
+    pub daily_max: Sats,
     pub tips_per_hour: u32,
     pub tips_per_pair: u32,
 }
@@ -110,6 +111,80 @@ pub fn rejected(code: &str, tip: &TipContext<'_>, limits: &Limits, settings_link
         ),
         _ => format!("😕 @{sender}, this tip couldn't be sent."),
     }
+}
+
+/// Sent when the receiver has no Lightning address yet: nothing was charged, the tip waits for
+/// them. The receiver is verified by now, so mentioning them is fine (and is the point).
+pub fn pledged(tip: &TipContext<'_>, link: &str) -> String {
+    format!(
+        "⚡ @{}, @{} sent you **{}**{}. Nothing has been charged yet: add a Lightning address to \
+         receive it → [Receive sats]({link})",
+        tip.receiver,
+        tip.sender,
+        tip.amount,
+        note_suffix(tip.note)
+    )
+}
+
+/// The reply for a verified tip whose payment failed, keyed by its `error_code`.
+pub fn failed(
+    code: &str,
+    tip: &TipContext<'_>,
+    limits: &Limits,
+    links: &FailureLinks<'_>,
+) -> String {
+    let sender = tip.sender;
+    let receiver = tip.receiver;
+    let amount = tip.amount;
+    match code {
+        "quota_exceeded" => format!(
+            "😕 @{sender}, your wallet's budget is used up, so the **{amount}** tip to @{receiver} \
+             wasn't sent. Raise the budget in your wallet, then tip again."
+        ),
+        "insufficient_balance" => format!(
+            "😕 @{sender}, your wallet doesn't have enough sats for the **{amount}** tip to \
+             @{receiver}. Top it up, then tip again."
+        ),
+        "restricted" | "unauthorized" | "wallet_invalid" => format!(
+            "😕 @{sender}, MergeTip isn't allowed to pay from your wallet any more. \
+             [Reconnect your wallet]({}), then tip again.",
+            links.wallet
+        ),
+        "not_implemented" => format!(
+            "😕 @{sender}, your wallet can't pay invoices over this connection. \
+             [Connect a different wallet]({}).",
+            links.wallet
+        ),
+        "no_wallet" => format!(
+            "😕 @{sender}, your wallet was disconnected before this tip could be paid. \
+             [Connect a wallet]({}), then tip again.",
+            links.wallet
+        ),
+        "daily_cap_reached" => format!(
+            "😕 @{sender}, this tip would take you over your daily limit of **{}**. \
+             [Manage limits]({}).",
+            limits.daily_max, links.limits
+        ),
+        "over_per_tip_cap" => format!(
+            "😕 @{sender}, **{amount}** is above your per-tip limit of **{}**. [Manage limits]({}).",
+            limits.per_tip_max, links.limits
+        ),
+        "receiver_unpayable" => format!(
+            "😕 @{sender}, @{receiver}'s Lightning address couldn't accept this payment, so \
+             nothing was sent."
+        ),
+        _ => format!(
+            "😕 @{sender}, the **{amount}** tip to @{receiver} couldn't be paid. Nothing was \
+             charged; please try again later."
+        ),
+    }
+}
+
+/// Where failure replies send the sender to fix things.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FailureLinks<'a> {
+    pub wallet: &'a str,
+    pub limits: &'a str,
 }
 
 /// One reply listing every malformed command in a comment, with the fix for each.
@@ -171,6 +246,7 @@ mod tests {
 
     const LIMITS: Limits = Limits {
         per_tip_max: Sats::new(10_000),
+        daily_max: Sats::new(50_000),
         tips_per_hour: 20,
         tips_per_pair: 3,
     };
@@ -233,6 +309,34 @@ mod tests {
                 )
             })
             .collect();
+        insta::assert_snapshot!(rendered.join("\n"));
+    }
+
+    #[test]
+    fn payment_messages() {
+        let links = FailureLinks {
+            wallet: "https://mergetip.dev/settings/wallet",
+            limits: "https://mergetip.dev/settings/limits",
+        };
+        let codes = [
+            "quota_exceeded",
+            "insufficient_balance",
+            "restricted",
+            "not_implemented",
+            "no_wallet",
+            "daily_cap_reached",
+            "over_per_tip_cap",
+            "receiver_unpayable",
+            "payment_failed",
+        ];
+        let mut rendered: Vec<String> = codes
+            .iter()
+            .map(|code| format!("{code}: {}", failed(code, &tip(None), &LIMITS, &links)))
+            .collect();
+        rendered.push(pledged(
+            &tip(Some("the docs")),
+            "https://mergetip.dev/settings/receive",
+        ));
         insta::assert_snapshot!(rendered.join("\n"));
     }
 

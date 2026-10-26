@@ -2,7 +2,7 @@
 
 use mergetip_github::{
     GitHubError, RepoName,
-    replies::{self, Limits, TipContext},
+    replies::{self, FailureLinks, Limits, TipContext},
 };
 use mergetip_parser::SYNTAX;
 use mergetip_store::{
@@ -65,6 +65,12 @@ impl Engine {
 
     async fn render(&self, tip: &Tip, message: TipMessage) -> Result<String, EngineError> {
         let sender = users::get(&self.pool, tip.sender_id).await?;
+        let limits = Limits {
+            per_tip_max: sender.per_tip_max,
+            daily_max: sender.daily_max,
+            tips_per_hour: TIPS_PER_HOUR,
+            tips_per_pair: TIPS_PER_PAIR,
+        };
         let context = TipContext {
             sender: &sender.github_login,
             receiver: &tip.receiver_login,
@@ -83,13 +89,19 @@ impl Engine {
             TipMessage::Rejected => replies::rejected(
                 tip.error_code.as_deref().unwrap_or("unknown"),
                 &context,
-                &Limits {
-                    per_tip_max: sender.per_tip_max,
-                    tips_per_hour: TIPS_PER_HOUR,
-                    tips_per_pair: TIPS_PER_PAIR,
-                },
+                &limits,
                 &self.link("/settings/limits"),
             ),
+            TipMessage::Failed => replies::failed(
+                tip.error_code.as_deref().unwrap_or("payment_failed"),
+                &context,
+                &limits,
+                &FailureLinks {
+                    wallet: &self.link("/settings/wallet"),
+                    limits: &self.link("/settings/limits"),
+                },
+            ),
+            TipMessage::Pledged => replies::pledged(&context, &self.link("/settings/receive")),
             TipMessage::Held => replies::held(&context),
             TipMessage::Paid => {
                 replies::receipt(&context, tip.payment_hash.as_deref().unwrap_or_default())

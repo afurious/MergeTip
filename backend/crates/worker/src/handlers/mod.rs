@@ -4,5 +4,7 @@
 mod engine;
 mod noop;
 
-pub use engine::{PayTipStubHandler, PostReplyHandler, ProcessEventHandler, VerifyTipHandler};
+pub use engine::{
+    PayTipHandler, PostReplyHandler, ProcessEventHandler, ReconcilePaymentHandler, VerifyTipHandler,
+};
 pub use noop::NoopHandler;

@@ -32,6 +32,138 @@
         }
       }
     },
+    "/v1/auth/extension-token": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Mint a bearer token for the browser extension.",
+        "operationId": "create_extension_token",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtensionToken"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/v1/auth/github/callback": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "GitHub's redirect back after sign-in: create the session and return to the web app.",
+        "operationId": "github_callback",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "description": "Set by GitHub when the user declined.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Signed in; redirect to the web app with the session cookie set"
+          },
+          "400": {
+            "description": "State mismatch or missing code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/github/login": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Start signing in: redirect to GitHub.",
+        "operationId": "github_login",
+        "parameters": [
+          {
+            "name": "redirect",
+            "in": "query",
+            "description": "Web app path to return to after signing in, e.g. `/claim/abc`. Defaults to `/dashboard`.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to GitHub"
+          }
+        }
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sign out of this browser.",
+        "operationId": "logout",
+        "responses": {
+          "204": {
+            "description": "Signed out"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/v1/health": {
       "get": {
         "tags": [
@@ -51,6 +183,208 @@
             }
           }
         }
+      }
+    },
+    "/v1/me": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "The signed-in user.",
+        "operationId": "get_me",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/me/lightning-address": {
+      "put": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Link the receiver's Lightning address, after checking it resolves.",
+        "operationId": "set_lightning_address",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddressRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`lnurl_invalid` or `lnurl_unreachable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/me/settings": {
+      "patch": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Change limits and preferences. Omitted fields are unchanged.",
+        "operationId": "update_settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalid_setting`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/me/wallet": {
+      "put": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Connect (or replace) the sender's wallet.",
+        "operationId": "connect_wallet",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WalletRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`nwc_invalid_uri`, `nwc_unreachable` or `nwc_missing_pay_invoice`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Disconnect the sender's wallet.",
+        "operationId": "disconnect_wallet",
+        "responses": {
+          "204": {
+            "description": "Disconnected (or nothing was connected)"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/v1/webhooks/github": {
@@ -130,6 +464,44 @@
   },
   "components": {
     "schemas": {
+      "AddressRequest": {
+        "type": "object",
+        "required": [
+          "address"
+        ],
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "A Lightning address such as `alice@getalby.com`."
+          }
+        }
+      },
+      "Caps": {
+        "type": "object",
+        "required": [
+          "per_tip_max_sats",
+          "daily_max_sats",
+          "spent_today_sats"
+        ],
+        "properties": {
+          "daily_max_sats": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "per_tip_max_sats": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "spent_today_sats": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Sats paid or in flight since midnight UTC.",
+            "minimum": 0
+          }
+        }
+      },
       "ErrorBody": {
         "type": "object",
         "required": [
@@ -157,6 +529,23 @@
           }
         }
       },
+      "ExtensionToken": {
+        "type": "object",
+        "required": [
+          "token",
+          "expires_at"
+        ],
+        "properties": {
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "token": {
+            "type": "string",
+            "description": "Send as `Authorization: Bearer <token>`."
+          }
+        }
+      },
       "Health": {
         "type": "object",
         "required": [
@@ -173,6 +562,149 @@
             "description": "The running build's version."
           }
         }
+      },
+      "Me": {
+        "type": "object",
+        "required": [
+          "id",
+          "github_login",
+          "avatar_url",
+          "wallet",
+          "caps",
+          "confirm_threshold_sats",
+          "confirm_otp_enabled",
+          "email_opt_out"
+        ],
+        "properties": {
+          "avatar_url": {
+            "type": "string"
+          },
+          "caps": {
+            "$ref": "#/components/schemas/Caps"
+          },
+          "confirm_otp_enabled": {
+            "type": "boolean"
+          },
+          "confirm_threshold_sats": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email_opt_out": {
+            "type": "boolean"
+          },
+          "github_login": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lightning_address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "wallet": {
+            "$ref": "#/components/schemas/WalletStatus"
+          }
+        }
+      },
+      "SettingsRequest": {
+        "type": "object",
+        "properties": {
+          "confirm_otp_enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "confirm_threshold_sats": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "daily_max_sats": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "email_opt_out": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "per_tip_max_sats": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "WalletRequest": {
+        "type": "object",
+        "required": [
+          "nwc_uri"
+        ],
+        "properties": {
+          "nwc_uri": {
+            "type": "string",
+            "description": "`nostr+walletconnect://…`. Treated as a password: never stored in plain text, logged or\nreturned."
+          }
+        }
+      },
+      "WalletStatus": {
+        "type": "object",
+        "required": [
+          "connected",
+          "methods"
+        ],
+        "properties": {
+          "connected": {
+            "type": "boolean"
+          },
+          "methods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "NIP-47 methods the wallet granted, e.g. `pay_invoice`."
+          },
+          "relay": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer"
+      },
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "mt_session"
       }
     }
   },
@@ -184,6 +716,14 @@
     {
       "name": "webhooks",
       "description": "Signed deliveries from external services"
+    },
+    {
+      "name": "auth",
+      "description": "Signing in and sessions"
+    },
+    {
+      "name": "me",
+      "description": "The signed-in user's account and settings"
     }
   ]
 }

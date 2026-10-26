@@ -1,0 +1,140 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO payment_attempts (tip_id, payment_hash, bolt11, amount_msat,\n                                      invoice_expires_at, status)\n        VALUES ($1, $2, $3, $4, $5, 'pending')\n        RETURNING id, tip_id, payment_hash, bolt11, amount_msat, invoice_expires_at, status,\n                  nwc_error_code, started_at, finished_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "payment_attempts",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tip_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "payment_attempts",
+            "name": "tip_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "payment_hash",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "payment_attempts",
+            "name": "payment_hash"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "bolt11",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "payment_attempts",
+            "name": "bolt11"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "amount_msat",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "payment_attempts",
+            "name": "amount_msat"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "invoice_expires_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "payment_attempts",
+            "name": "invoice_expires_at"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "payment_attempts",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "nwc_error_code",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "payment_attempts",
+            "name": "nwc_error_code"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "started_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "payment_attempts",
+            "name": "started_at"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "finished_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "payment_attempts",
+            "name": "finished_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Int8",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "130bdf5ac4fbecca72308a40fe392954571c0e144d058d3a5b926b5ba7b7ca68"
+}

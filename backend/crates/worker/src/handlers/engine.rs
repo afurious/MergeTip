@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use mergetip_engine::{
-    Engine, EngineError,
-    jobs::{JobPayload, PayTip, PostReply, ProcessEvent, VerifyTip},
+    Engine, EngineError, ReconcileOutcome,
+    jobs::{JobPayload, PayTip, PostReply, ProcessEvent, ReconcilePayment, VerifyTip},
 };
 use mergetip_store::jobs::Job;
 
@@ -67,10 +67,45 @@ engine_handler!(
     |engine, payload| engine.post_reply(&payload)
 );
 
-engine_handler!(
-    /// Staging only: settles tips with a fake proof. Registered only when `STUB_PAYER=true`, so
-    /// without it `pay_tip` jobs wait for the real payer.
-    PayTipStubHandler,
-    PayTip,
-    |engine, payload| engine.pay_tip_stub(payload.tip_id)
-);
+/// Pays a tip. On the job's last attempt the engine fails the tip rather than asking for
+/// another retry, so a tip can't be left in `paying` by a dead-lettered job.
+pub struct PayTipHandler(pub Arc<Engine>);
+
+#[async_trait]
+impl JobHandler for PayTipHandler {
+    fn kind(&self) -> &'static str {
+        PayTip::KIND
+    }
+
+    async fn handle(&self, ctx: &JobContext, job: &Job) -> Result<JobOutcome, JobError> {
+        let payload: PayTip = decode(job)?;
+        self.0
+            .pay_tip(payload.tip_id, job.is_last_attempt())
+            .await
+            .map_err(|err| job_error(ctx, err))?;
+        Ok(JobOutcome::Done)
+    }
+}
+
+/// Settles payments whose outcome was unknown; re-runs itself until the outcome is certain.
+pub struct ReconcilePaymentHandler(pub Arc<Engine>);
+
+#[async_trait]
+impl JobHandler for ReconcilePaymentHandler {
+    fn kind(&self) -> &'static str {
+        ReconcilePayment::KIND
+    }
+
+    async fn handle(&self, ctx: &JobContext, job: &Job) -> Result<JobOutcome, JobError> {
+        let payload: ReconcilePayment = decode(job)?;
+        match self
+            .0
+            .reconcile_payment(payload.tip_id, payload.attempt_id)
+            .await
+            .map_err(|err| job_error(ctx, err))?
+        {
+            ReconcileOutcome::Done => Ok(JobOutcome::Done),
+            ReconcileOutcome::CheckAgainIn(delay) => Ok(JobOutcome::Reschedule(delay)),
+        }
+    }
+}
