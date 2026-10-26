@@ -1,6 +1,6 @@
 [package]
 name = "mergetip-fiat"
-description = "Bitnob client: quotes, payouts and webhooks"
+description = "Bitnob Payouts client: signed requests, quotes, payouts and webhooks (FR-10)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,16 +10,26 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+# An in-memory FiatProvider for tests in other crates.
+testing = []
+
 [dependencies]
 mergetip-core.workspace = true
-reqwest.workspace = true
+mergetip-crypto.workspace = true
+async-trait.workspace = true
+hex.workspace = true
 hmac.workspace = true
-sha2.workspace = true
+reqwest.workspace = true
+rust_decimal.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 thiserror.workspace = true
-async-trait.workspace = true
+time = { workspace = true, features = ["parsing", "formatting"] }
+tokio.workspace = true
+tracing.workspace = true
+zeroize.workspace = true
 
 [dev-dependencies]
 wiremock.workspace = true
-tokio.workspace = true

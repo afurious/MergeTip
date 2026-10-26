@@ -63,7 +63,7 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 ## M5: Fiat payouts and hardening
 
 - [x] 5.1 Fiat payouts RFC and schema
-- [ ] 5.2 `fiat` crate (Bitnob client)
+- [x] 5.2 `fiat` crate (Bitnob client)
 - [ ] 5.3 Receiver payout API
 - [ ] 5.4 Fiat pay path
 - [ ] 5.5 Bitnob webhooks
