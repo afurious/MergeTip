@@ -51,6 +51,8 @@ pub struct Session {
     pub kind: SessionKind,
     pub expires_at: OffsetDateTime,
     pub last_seen_at: OffsetDateTime,
+    /// When the user signed in (or the token was minted): how fresh the authentication is.
+    pub created_at: OffsetDateTime,
 }
 
 struct SessionRow {
@@ -59,6 +61,7 @@ struct SessionRow {
     kind: String,
     expires_at: OffsetDateTime,
     last_seen_at: OffsetDateTime,
+    created_at: OffsetDateTime,
 }
 
 impl TryFrom<SessionRow> for Session {
@@ -71,6 +74,7 @@ impl TryFrom<SessionRow> for Session {
             kind: row.kind.parse().map_err(corrupt)?,
             expires_at: row.expires_at,
             last_seen_at: row.last_seen_at,
+            created_at: row.created_at,
         })
     }
 }
@@ -88,7 +92,7 @@ pub async fn create(
         r#"
         INSERT INTO sessions (user_id, kind, token_hash, expires_at, user_agent)
         VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, user_id, kind, expires_at, last_seen_at
+        RETURNING id, user_id, kind, expires_at, last_seen_at, created_at
         "#,
         user_id.as_uuid(),
         kind.as_str(),
@@ -110,7 +114,7 @@ pub async fn find_active(
     let row = sqlx::query_as!(
         SessionRow,
         r#"
-        SELECT s.id, s.user_id, s.kind, s.expires_at, s.last_seen_at
+        SELECT s.id, s.user_id, s.kind, s.expires_at, s.last_seen_at, s.created_at
         FROM sessions s JOIN users u ON u.id = s.user_id
         WHERE s.token_hash = $1 AND s.expires_at > $2 AND u.deleted_at IS NULL
         "#,

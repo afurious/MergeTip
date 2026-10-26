@@ -8,6 +8,7 @@ use mergetip_crypto::Redacted;
 use mergetip_engine::jobs::{self, ResumeSenderTips};
 use mergetip_payer::{LightningAddress, ResolveError, nwc::PayError};
 use mergetip_store::{
+    sessions::SessionKind,
     users::{self, SettingsUpdate},
     wallets::{self, NewConnection},
 };
@@ -22,6 +23,8 @@ use crate::{
 
 /// Connecting and checking a wallet must finish well inside the request timeout.
 const WALLET_CHECK_TIMEOUT: Duration = Duration::from_secs(8);
+/// How recent a sign-in must be to loosen a limit or turn confirmation codes off.
+const RECENT_SIGN_IN: time::Duration = time::Duration::minutes(15);
 /// The lowest confirmation threshold a sender may set (FR-12.1).
 const MIN_CONFIRM_THRESHOLD: u64 = 1_000;
 
@@ -254,6 +257,31 @@ pub async fn update_settings(
         return Err(invalid(
             "The per-tip limit can't be higher than the daily limit.",
         ));
+    }
+
+    // Loosening a protection needs proof it's really the user right now, not just a live
+    // session: the web app's cookie (never the extension's token) from a recent sign-in.
+    // Otherwise a stolen session could switch codes off and then confirm a large tip.
+    let weakens = body.confirm_otp_enabled == Some(false) && user.confirm_otp_enabled
+        || body
+            .confirm_threshold_sats
+            .is_some_and(|t| t > user.confirm_threshold.get())
+        || body
+            .per_tip_max_sats
+            .is_some_and(|v| v > user.per_tip_max.get())
+        || body
+            .daily_max_sats
+            .is_some_and(|v| v > user.daily_max.get());
+    if weakens {
+        let fresh = auth.session.kind == SessionKind::Web
+            && state.clock().now() - auth.session.created_at <= RECENT_SIGN_IN;
+        if !fresh {
+            return Err(ApiError::new(
+                StatusCode::FORBIDDEN,
+                "reauth_required",
+                "Sign in with GitHub again to loosen a limit or turn confirmation codes off.",
+            ));
+        }
     }
 
     users::update_settings(

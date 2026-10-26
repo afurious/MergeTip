@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT s.id, s.user_id, s.kind, s.expires_at, s.last_seen_at\n        FROM sessions s JOIN users u ON u.id = s.user_id\n        WHERE s.token_hash = $1 AND s.expires_at > $2 AND u.deleted_at IS NULL\n        ",
+  "query": "\n        SELECT s.id, s.user_id, s.kind, s.expires_at, s.last_seen_at, s.created_at\n        FROM sessions s JOIN users u ON u.id = s.user_id\n        WHERE s.token_hash = $1 AND s.expires_at > $2 AND u.deleted_at IS NULL\n        ",
   "describe": {
     "columns": [
       {
@@ -57,6 +57,17 @@
             "name": "last_seen_at"
           }
         }
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "sessions",
+            "name": "created_at"
+          }
+        }
       }
     ],
     "parameters": {
@@ -70,8 +81,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "b04e26d65b15aa17b68d66f30617f2a4d31d174905a29da1587e763dde0c42cb"
+  "hash": "94ade7a5ecb978325057f159d78dfc17f36ffe9ec5b310edf8d13459a8e70159"
 }

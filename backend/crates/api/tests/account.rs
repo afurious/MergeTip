@@ -409,3 +409,75 @@ async fn deleting_the_account_erases_secrets_and_closes_waiting_tips(
     assert_eq!(rows, 4, "tip rows are kept for idempotency");
     Ok(())
 }
+
+/// M4 review: a stolen session must not be able to switch confirmation codes off (then confirm
+/// a large tip) or raise limits. Loosening needs the web cookie from a recent sign-in.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn loosening_protections_needs_a_recent_web_sign_in(pool: PgPool) -> sqlx::Result<()> {
+    let app = fake_app(pool.clone());
+    let session = session_for(&pool, 10, "maintainer").await;
+    let patch = |body: Value, session: String| {
+        let app = app.clone();
+        async move { send(&app, "PATCH", "/v1/me/settings", Some(&session), Some(body)).await }
+    };
+    sqlx::query!("UPDATE users SET confirm_otp_enabled = true WHERE github_id = 10")
+        .execute(&pool)
+        .await?;
+
+    // A session from yesterday can tighten, not loosen.
+    sqlx::query!("UPDATE sessions SET created_at = now() - interval '1 day'")
+        .execute(&pool)
+        .await?;
+    for loosen in [
+        json!({ "confirm_otp_enabled": false }),
+        json!({ "confirm_threshold_sats": 100_000 }),
+        json!({ "per_tip_max_sats": 20_000 }),
+        json!({ "daily_max_sats": 60_000 }),
+    ] {
+        let (status, body) = patch(loosen.clone(), session.clone()).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{loosen}");
+        assert_eq!(body["error"]["code"], "reauth_required");
+    }
+    let (status, _) = patch(
+        json!({ "per_tip_max_sats": 5_000, "confirm_threshold_sats": 20_000 }),
+        session.clone(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "tightening is always fine");
+
+    // A fresh sign-in can loosen.
+    let fresh = session_for(&pool, 10, "maintainer").await;
+    let (status, body) = patch(
+        json!({ "confirm_otp_enabled": false, "per_tip_max_sats": 20_000 }),
+        fresh,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["confirm_otp_enabled"], false);
+
+    // The extension's token never can, however fresh.
+    let token = mergetip_crypto::random_token().unwrap();
+    let user = users::get_by_login(&pool, "maintainer").await.unwrap();
+    mergetip_store::sessions::create(
+        &pool,
+        user.id,
+        mergetip_store::sessions::SessionKind::Extension,
+        &token.hash,
+        time::OffsetDateTime::now_utc() + time::Duration::days(1),
+        None,
+    )
+    .await
+    .unwrap();
+    let request = axum::http::Request::patch("/v1/me/settings")
+        .header("authorization", format!("Bearer {}", token.raw.expose()))
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            json!({ "daily_max_sats": 90_000 }).to_string(),
+        ))
+        .unwrap();
+    let response = tower::ServiceExt::oneshot(app.clone(), request)
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    Ok(())
+}
