@@ -293,3 +293,77 @@ async fn receive_status_reports_fiat_and_its_minimum(pool: PgPool) -> sqlx::Resu
     );
     Ok(())
 }
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn tips_show_their_fiat_payout_without_the_destination(pool: PgPool) -> sqlx::Result<()> {
+    let app = fiat_app(pool.clone(), fake_fiat()).await;
+    let sender = session_for(&pool, 10, "maintainer").await;
+    let installation = mergetip_store::installations::upsert(
+        &pool,
+        mergetip_core::GithubInstallationId::new(77),
+        "acme",
+    )
+    .await
+    .unwrap();
+    let maintainer = users::get_by_login(&pool, "maintainer").await.unwrap();
+    let mut conn = pool.acquire().await?;
+    for (n, fiat) in [(1, true), (2, false)] {
+        let tip = tips::insert_idempotent(
+            &mut conn,
+            &tips::NewTip {
+                idempotency_key: format!("k{n}"),
+                installation_id: installation.id,
+                sender_id: maintainer.id,
+                receiver_login: "reviewer".into(),
+                thread: mergetip_core::ThreadRef {
+                    owner: "acme".into(),
+                    repo: "widgets".into(),
+                    number: 1,
+                    is_pr: true,
+                },
+                comment_id: n,
+                command_index: 0,
+                kind: mergetip_core::TipKind::Now,
+                amount: mergetip_core::Sats::new(5_000),
+                note: None,
+            },
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        if fiat {
+            tips::set_fiat_details(
+                &pool,
+                tip.id,
+                &tips::FiatDetails {
+                    currency: Some("NGN".into()),
+                    amount: Some(rust_decimal::Decimal::from_str("5000.00").unwrap()),
+                    fx_rate: Some(rust_decimal::Decimal::from(100_000_000)),
+                    fees: Some(rust_decimal::Decimal::from_str("0.10").unwrap()),
+                    quote_id: Some("QT2_1".into()),
+                    payout_id: Some("po_1".into()),
+                    provider_status: Some("processing".into()),
+                },
+            )
+            .await
+            .unwrap();
+        }
+    }
+    let (status, body) = send(&app, "GET", "/v1/me/tips", Some(&sender), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body["items"][0]["fiat"],
+        serde_json::Value::Null,
+        "Lightning tip"
+    );
+    assert_eq!(
+        body["items"][1]["fiat"],
+        json!({ "currency": "NGN", "amount": "5000.00", "rate": "100000000",
+                "fees": "0.10", "status": "processing" })
+    );
+    assert!(
+        !body.to_string().contains("po_1"),
+        "provider IDs stay internal"
+    );
+    Ok(())
+}

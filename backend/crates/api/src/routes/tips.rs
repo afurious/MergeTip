@@ -91,6 +91,21 @@ pub struct Tip {
     #[serde(with = "time::serde::rfc3339::option")]
     #[schema(value_type = Option<String>, format = DateTime)]
     pub expires_at: Option<OffsetDateTime>,
+    /// For tips paid out in local currency (FR-10.6); `null` for Lightning tips. Never shows
+    /// where the money went.
+    pub fiat: Option<TipFiat>,
+}
+
+/// What a fiat tip was quoted and how its payout is going. Amounts are decimal strings.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct TipFiat {
+    pub currency: String,
+    pub amount: Option<String>,
+    /// Local currency per BTC.
+    pub rate: Option<String>,
+    pub fees: Option<String>,
+    /// `initiated`, `processing`, `success` or `failed`.
+    pub status: Option<String>,
 }
 
 /// `{ tip }`, the body of the claim and confirmation endpoints.
@@ -138,6 +153,13 @@ impl Tip {
             } else {
                 tip.expires_at
             },
+            fiat: tip.fiat.currency.clone().map(|currency| TipFiat {
+                currency,
+                amount: tip.fiat.amount.map(|d| d.to_string()),
+                rate: tip.fiat.fx_rate.map(|d| d.to_string()),
+                fees: tip.fiat.fees.map(|d| d.to_string()),
+                status: tip.fiat.provider_status.clone(),
+            }),
         }
     }
 

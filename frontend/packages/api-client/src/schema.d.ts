@@ -591,6 +591,7 @@ export interface components {
              *     otherwise the sender or pledge deadline.
              */
             expires_at?: string | null;
+            fiat?: components["schemas"]["TipFiat"] | null;
             id: string;
             /** @enum {string} */
             kind: "now" | "on_merge";
@@ -623,6 +624,16 @@ export interface components {
         /** @description `{ tip }`, the body of the claim and confirmation endpoints. */
         TipEnvelope: {
             tip: components["schemas"]["Tip"];
+        };
+        /** @description What a fiat tip was quoted and how its payout is going. Amounts are decimal strings. */
+        TipFiat: {
+            amount?: string | null;
+            currency: string;
+            fees?: string | null;
+            /** @description Local currency per BTC. */
+            rate?: string | null;
+            /** @description `initiated`, `processing`, `success` or `failed`. */
+            status?: string | null;
         };
         /** @enum {string} */
         TipKindBody: "now" | "on_merge";

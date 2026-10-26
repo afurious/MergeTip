@@ -2148,6 +2148,17 @@
             "format": "date-time",
             "description": "When the tip's current wait ends: the confirmation deadline while it awaits confirmation,\notherwise the sender or pledge deadline."
           },
+          "fiat": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TipFiat",
+                "description": "For tips paid out in local currency (FR-10.6); `null` for Lightning tips. Never shows\nwhere the money went."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "id": {
             "type": "string"
           },
@@ -2250,6 +2261,44 @@
         "properties": {
           "tip": {
             "$ref": "#/components/schemas/Tip"
+          }
+        }
+      },
+      "TipFiat": {
+        "type": "object",
+        "description": "What a fiat tip was quoted and how its payout is going. Amounts are decimal strings.",
+        "required": [
+          "currency"
+        ],
+        "properties": {
+          "amount": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "currency": {
+            "type": "string"
+          },
+          "fees": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Local currency per BTC."
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`initiated`, `processing`, `success` or `failed`."
           }
         }
       },
