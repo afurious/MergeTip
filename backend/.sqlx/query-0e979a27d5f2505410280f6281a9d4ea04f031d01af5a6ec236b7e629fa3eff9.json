@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO otp_codes (tip_id, code_hmac, expires_at, attempts, created_at)\n        VALUES ($1, $2, $3, 0, $4)\n        ON CONFLICT (tip_id) DO UPDATE SET\n            code_hmac = EXCLUDED.code_hmac, expires_at = EXCLUDED.expires_at,\n            attempts = 0, created_at = EXCLUDED.created_at\n        WHERE otp_codes.created_at <= $5\n        RETURNING tip_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "tip_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "otp_codes",
+            "name": "tip_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0e979a27d5f2505410280f6281a9d4ea04f031d01af5a6ec236b7e629fa3eff9"
+}
