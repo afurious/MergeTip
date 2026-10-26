@@ -23,6 +23,8 @@ pub struct WorkerConfig {
     pub api_base_url: String,
     /// How pledge notices are emailed.
     pub mailer: mergetip_notify::MailerConfig,
+    /// Bitnob credentials when `FIAT_PAYOUTS_ENABLED=true` (RFC 0004).
+    pub bitnob: Option<mergetip_fiat::BitnobConfig>,
 }
 
 #[derive(Debug, Clone)]
@@ -93,6 +95,7 @@ impl WorkerConfig {
                 .trim_end_matches('/')
                 .to_owned(),
             mailer: mergetip_runtime::config::mailer_config(env, app_env)?,
+            bitnob: mergetip_runtime::config::bitnob_config(env)?,
         })
     }
 

@@ -10,6 +10,7 @@ pub mod confirm;
 mod error;
 mod events;
 mod expiry;
+mod fiat;
 mod holds;
 pub mod jobs;
 mod notices;
@@ -81,6 +82,7 @@ pub struct Engine {
     settings: EngineSettings,
     payments: Payments,
     mailer: Arc<dyn Mailer>,
+    fiat: Option<fiat::FiatPayments>,
 }
 
 impl std::fmt::Debug for Engine {
@@ -106,7 +108,19 @@ impl Engine {
             settings,
             payments,
             mailer: Arc::new(DisabledMailer),
+            fiat: None,
         }
+    }
+
+    /// Pays receivers who chose local currency through `provider` (RFC 0004). Its invoices must
+    /// be for `network`. Without it, every tip is paid over Lightning.
+    pub fn with_fiat(
+        mut self,
+        provider: Arc<dyn mergetip_fiat::FiatProvider>,
+        network: mergetip_payer::Network,
+    ) -> Self {
+        self.fiat = Some(fiat::FiatPayments { provider, network });
+        self
     }
 
     /// Sends pledge emails through `mailer`. Without it, notices are GitHub mentions only.

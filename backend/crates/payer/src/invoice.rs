@@ -42,6 +42,28 @@ pub fn validate(
     network: Network,
     now: OffsetDateTime,
 ) -> Result<ValidatedInvoice, InvoiceError> {
+    check(bolt11, expected, Some(metadata), network, now)
+}
+
+/// The same checks for an invoice from a payout provider (Bitnob), which commits to no LNURL
+/// metadata: exact amount, network, signature and at least [`MIN_TIME_TO_EXPIRY`] left. The
+/// amount check is what stops a provider from charging the sender more than the tip.
+pub fn validate_provider_invoice(
+    bolt11: &str,
+    expected: Msats,
+    network: Network,
+    now: OffsetDateTime,
+) -> Result<ValidatedInvoice, InvoiceError> {
+    check(bolt11, expected, None, network, now)
+}
+
+fn check(
+    bolt11: &str,
+    expected: Msats,
+    metadata: Option<&str>,
+    network: Network,
+    now: OffsetDateTime,
+) -> Result<ValidatedInvoice, InvoiceError> {
     let invoice: Bolt11Invoice = bolt11
         .trim()
         .parse()
@@ -66,11 +88,13 @@ pub fn validate(
         return Err(InvoiceError::ExpiresTooSoon);
     }
 
-    let expected_hash = Sha256::digest(metadata.as_bytes());
-    match invoice.description() {
-        Bolt11InvoiceDescriptionRef::Hash(hash)
-            if AsRef::<[u8]>::as_ref(&hash.0) == expected_hash.as_slice() => {}
-        _ => return Err(InvoiceError::DescriptionHashMismatch),
+    if let Some(metadata) = metadata {
+        let expected_hash = Sha256::digest(metadata.as_bytes());
+        match invoice.description() {
+            Bolt11InvoiceDescriptionRef::Hash(hash)
+                if AsRef::<[u8]>::as_ref(&hash.0) == expected_hash.as_slice() => {}
+            _ => return Err(InvoiceError::DescriptionHashMismatch),
+        }
     }
 
     Ok(ValidatedInvoice {
@@ -108,6 +132,35 @@ mod tests {
             expiry: Duration::from_secs(600),
             ..MintParams::default()
         }
+    }
+
+    #[test]
+    fn provider_invoices_skip_only_the_metadata_check() {
+        let any_metadata = MintParams {
+            metadata: "whatever bitnob commits to".into(),
+            ..params()
+        };
+        let bolt11 = mint_invoice(&any_metadata).bolt11;
+        assert!(
+            validate_provider_invoice(&bolt11, Msats::new(2_100_000), Network::Regtest, now())
+                .is_ok()
+        );
+        assert!(matches!(
+            validate_provider_invoice(&bolt11, Msats::new(2_000_000), Network::Regtest, now()),
+            Err(InvoiceError::WrongAmount { .. })
+        ));
+        assert!(matches!(
+            validate_provider_invoice(&bolt11, Msats::new(2_100_000), Network::Bitcoin, now()),
+            Err(InvoiceError::WrongNetwork { .. })
+        ));
+        let soon = mint_invoice(&MintParams {
+            expiry: Duration::from_secs(60),
+            ..any_metadata
+        });
+        assert_eq!(
+            validate_provider_invoice(&soon.bolt11, Msats::new(2_100_000), Network::Regtest, now()),
+            Err(InvoiceError::ExpiresTooSoon)
+        );
     }
 
     fn check(params: &MintParams) -> Result<ValidatedInvoice, InvoiceError> {

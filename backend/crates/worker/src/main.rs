@@ -51,20 +51,28 @@ async fn main() -> anyhow::Result<()> {
     settings.production = config.app_env == mergetip_runtime::AppEnv::Production;
     let mailer =
         mergetip_notify::from_config(&config.mailer).context("cannot set up email delivery")?;
-    let engine = Arc::new(
-        Engine::new(
-            pool.clone(),
-            Arc::new(github),
-            clock.clone(),
-            settings,
-            Payments {
-                receivers: Arc::new(receivers),
-                wallets: Arc::new(NwcConnector),
-                keyring: config.keyring.clone(),
-            },
-        )
-        .with_mailer(mailer),
-    );
+    let engine = Engine::new(
+        pool.clone(),
+        Arc::new(github),
+        clock.clone(),
+        settings,
+        Payments {
+            receivers: Arc::new(receivers),
+            wallets: Arc::new(NwcConnector),
+            keyring: config.keyring.clone(),
+        },
+    )
+    .with_mailer(mailer);
+    let engine = Arc::new(match &config.bitnob {
+        Some(bitnob) => engine.with_fiat(
+            Arc::new(
+                mergetip_fiat::BitnobClient::new(bitnob.clone())
+                    .context("cannot set up the Bitnob client")?,
+            ),
+            config.lightning_network,
+        ),
+        None => engine,
+    });
 
     // The recurring expiry job; a no-op when another worker already created it.
     let mut conn = pool.acquire().await.context("cannot reach the database")?;

@@ -2131,16 +2131,19 @@ dependencies = [
 name = "mergetip-engine"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "futures",
  "hex",
  "mergetip-core",
  "mergetip-crypto",
+ "mergetip-fiat",
  "mergetip-github",
  "mergetip-notify",
  "mergetip-parser",
  "mergetip-payer",
  "mergetip-store",
  "nostr-sdk",
+ "rust_decimal",
  "serde",
  "serde_json",
  "sha2 0.11.1",
