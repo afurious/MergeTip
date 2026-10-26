@@ -590,7 +590,7 @@
         "tags": [
           "email"
         ],
-        "summary": "Unsubscribe from the link in an email; answers with a short page.",
+        "summary": "The page behind the link in an email: it asks before unsubscribing. Opening a link must not\nchange anything (RFC 8058): mail scanners and link previews fetch every link in a message.",
         "operationId": "unsubscribe_link",
         "parameters": [
           {
@@ -605,7 +605,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Unsubscribed (HTML page)",
+            "description": "A page with an unsubscribe button (HTML)",
             "content": {
               "text/html": {}
             }
@@ -626,7 +626,7 @@
         "tags": [
           "email"
         ],
-        "summary": "One-click unsubscribe (RFC 8058), sent by mail clients from the `List-Unsubscribe` header.",
+        "summary": "Unsubscribe: RFC 8058 one-click from a mail client (`List-Unsubscribe=One-Click`, answered\n204), or the button on the confirm page (answered with a page).",
         "operationId": "unsubscribe_one_click",
         "parameters": [
           {
@@ -639,9 +639,26 @@
             }
           }
         ],
+        "requestBody": {
+          "description": "`List-Unsubscribe=One-Click` from a mail client, or empty from the confirm page",
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
+          "200": {
+            "description": "Unsubscribed (from the confirm page; HTML)",
+            "content": {
+              "text/html": {}
+            }
+          },
           "204": {
-            "description": "Unsubscribed"
+            "description": "Unsubscribed (one-click)"
           },
           "400": {
             "description": "`invalid_token`",

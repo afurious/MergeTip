@@ -154,10 +154,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Unsubscribe from the link in an email; answers with a short page. */
+        /**
+         * The page behind the link in an email: it asks before unsubscribing. Opening a link must not
+         *     change anything (RFC 8058): mail scanners and link previews fetch every link in a message.
+         */
         get: operations["unsubscribe_link"];
         put?: never;
-        /** One-click unsubscribe (RFC 8058), sent by mail clients from the `List-Unsubscribe` header. */
+        /**
+         * Unsubscribe: RFC 8058 one-click from a mail client (`List-Unsubscribe=One-Click`, answered
+         *     204), or the button on the confirm page (answered with a page).
+         */
         post: operations["unsubscribe_one_click"];
         delete?: never;
         options?: never;
@@ -1129,7 +1135,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Unsubscribed (HTML page) */
+            /** @description A page with an unsubscribe button (HTML) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1159,9 +1165,23 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        /** @description `List-Unsubscribe=One-Click` from a mail client, or empty from the confirm page */
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": string;
+            };
+        };
         responses: {
-            /** @description Unsubscribed */
+            /** @description Unsubscribed (from the confirm page; HTML) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": unknown;
+                };
+            };
+            /** @description Unsubscribed (one-click) */
             204: {
                 headers: {
                     [name: string]: unknown;

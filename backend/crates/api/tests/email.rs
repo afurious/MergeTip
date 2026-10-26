@@ -22,7 +22,7 @@ async fn unsubscribe_links_opt_the_user_out(pool: PgPool) -> sqlx::Result<()> {
     let keyring = Keyring::from_hex(MASTER_KEY, None).unwrap();
     let token = mergetip_notify::unsubscribe::token(&keyring, user.id.as_uuid());
 
-    // A link clicked in a mail client.
+    // Opening the link (a person, or a mail scanner) only shows a confirm page.
     let response = app
         .clone()
         .oneshot(
@@ -39,6 +39,30 @@ async fn unsubscribe_links_opt_the_user_out(pool: PgPool) -> sqlx::Result<()> {
             .unwrap()
             .starts_with("text/html")
     );
+    let page = axum::body::to_bytes(response.into_body(), 1 << 16)
+        .await
+        .unwrap();
+    let page = String::from_utf8(page.to_vec()).unwrap();
+    assert!(
+        page.contains(&format!("action=\"?token={token}\"")),
+        "{page}"
+    );
+    assert!(
+        !users::get(&pool, user.id).await.unwrap().email_opt_out,
+        "opening the link changes nothing"
+    );
+
+    // Pressing the button on that page unsubscribes.
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post(format!("/v1/email/unsubscribe?token={token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
     assert!(users::get(&pool, user.id).await.unwrap().email_opt_out);
 
     // RFC 8058 one-click: a POST from the mail client, no cookies, no Origin.
