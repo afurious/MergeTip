@@ -10,7 +10,7 @@ use mergetip_core::{FixedClock, SystemClock};
 use mergetip_crypto::Keyring;
 use mergetip_engine::{
     Engine, EngineSettings, Payments,
-    jobs::{JobPayload, PayTip, PostReply, ProcessEvent, ResolveHeld, VerifyTip},
+    jobs::{JobPayload, PayTip, PostReply, ProcessEvent, ResolveHeld, ResumeSenderTips, VerifyTip},
 };
 use mergetip_github::{PullRequest, Review, testing::FakeGitHub};
 use mergetip_payer::{LnurlClient, Network, nwc::NwcConnector};
@@ -103,6 +103,25 @@ impl Harness {
         .unwrap();
     }
 
+    /// Connects a wallet the way `PUT /me/wallet` does: the connection plus the resume job.
+    pub async fn connect_wallet(&self, github_id: i64, login: &str) {
+        self.wallet_for(github_id, login).await;
+        let user_id = sqlx::query_scalar!("SELECT id FROM users WHERE github_id = $1", github_id)
+            .fetch_one(&self.pool)
+            .await
+            .unwrap();
+        let mut tx = self.pool.begin().await.unwrap();
+        mergetip_engine::jobs::enqueue(
+            &mut tx,
+            &ResumeSenderTips {
+                user_id: mergetip_core::UserId::from_uuid(user_id),
+            },
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+    }
+
     /// Stores and queues a delivery like the webhook endpoint does.
     pub async fn deliver(&mut self, event: &str, action: &str, payload: Value) {
         self.deliveries += 1;
@@ -172,6 +191,7 @@ impl Harness {
             VerifyTip::KIND,
             PostReply::KIND,
             ResolveHeld::KIND,
+            ResumeSenderTips::KIND,
         ])
         .await;
     }
@@ -205,6 +225,11 @@ impl Harness {
                 ResolveHeld::KIND => {
                     self.engine
                         .resolve_held(&ResolveHeld::decode(&job.payload).unwrap())
+                        .await
+                }
+                ResumeSenderTips::KIND => {
+                    self.engine
+                        .resume_sender_tips(ResumeSenderTips::decode(&job.payload).unwrap().user_id)
                         .await
                 }
                 other => panic!("unexpected job kind {other}"),

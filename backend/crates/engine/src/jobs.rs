@@ -1,7 +1,7 @@
 //! Typed job payloads. Each payload type knows its `jobs.kind`, so producers and handlers cannot
 //! disagree on a kind string or payload shape.
 
-use mergetip_core::{GithubInstallationId, TipId};
+use mergetip_core::{GithubInstallationId, TipId, UserId};
 use mergetip_github::Reaction;
 use mergetip_store::{
     StoreResult,
@@ -69,6 +69,16 @@ pub struct PayTip {
 
 impl JobPayload for PayTip {
     const KIND: &'static str = "pay_tip";
+}
+
+/// The sender just connected a wallet: move their waiting tips on to verification.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResumeSenderTips {
+    pub user_id: UserId,
+}
+
+impl JobPayload for ResumeSenderTips {
+    const KIND: &'static str = "resume_sender_tips";
 }
 
 /// Resolve the `held` (on-merge) tips of one pull request against its current state on GitHub:

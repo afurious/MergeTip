@@ -3,7 +3,10 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use mergetip_engine::{
     Engine, EngineError, ReconcileOutcome,
-    jobs::{JobPayload, PayTip, PostReply, ProcessEvent, ReconcilePayment, ResolveHeld, VerifyTip},
+    jobs::{
+        JobPayload, PayTip, PostReply, ProcessEvent, ReconcilePayment, ResolveHeld,
+        ResumeSenderTips, VerifyTip,
+    },
 };
 use mergetip_store::jobs::Job;
 
@@ -72,6 +75,13 @@ engine_handler!(
     ResolveHeldHandler,
     ResolveHeld,
     |engine, payload| engine.resolve_held(&payload)
+);
+
+engine_handler!(
+    /// Moves a sender's waiting tips on once they connect a wallet.
+    ResumeSenderTipsHandler,
+    ResumeSenderTips,
+    |engine, payload| engine.resume_sender_tips(payload.user_id)
 );
 
 /// Pays a tip. On the job's last attempt the engine fails the tip rather than asking for

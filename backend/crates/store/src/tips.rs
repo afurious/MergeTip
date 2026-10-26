@@ -408,6 +408,61 @@ pub async fn list_in_thread(
     .collect()
 }
 
+/// The sender's tips still waiting for them to connect a wallet, deadline not yet passed.
+pub async fn list_awaiting_sender(
+    exec: impl PgExecutor<'_>,
+    sender: UserId,
+    now: OffsetDateTime,
+) -> StoreResult<Vec<Tip>> {
+    sqlx::query_as!(
+        TipRow,
+        r#"
+        SELECT * FROM tips
+        WHERE sender_id = $1 AND state = 'awaiting_sender' AND expires_at > $2
+        ORDER BY created_at, command_index
+        "#,
+        sender.as_uuid(),
+        now,
+    )
+    .fetch_all(exec)
+    .await?
+    .into_iter()
+    .map(TryInto::try_into)
+    .collect()
+}
+
+/// Up to `limit` tips in `state` whose deadline is before `now`, locked until the caller's
+/// transaction ends. `SKIP LOCKED` lets several expiry workers split the work without waiting on
+/// or double-handling each other's rows. The deadline is `confirm_expires_at` for
+/// `awaiting_confirmation` and `expires_at` otherwise.
+pub async fn lock_expired(
+    conn: &mut PgConnection,
+    state: TipState,
+    now: OffsetDateTime,
+    limit: i64,
+) -> StoreResult<Vec<Tip>> {
+    sqlx::query_as!(
+        TipRow,
+        r#"
+        SELECT * FROM tips
+        WHERE state = $1
+          AND (CASE WHEN $1 = 'awaiting_confirmation' THEN confirm_expires_at
+                    ELSE expires_at END) < $2
+        ORDER BY id
+        LIMIT $3
+        FOR UPDATE SKIP LOCKED
+        "#,
+        state.as_str(),
+        now,
+        limit,
+    )
+    .fetch_all(conn)
+    .await?
+    .into_iter()
+    .map(TryInto::try_into)
+    .collect()
+}
+
 /// Records the payment hash of the tip's current attempt (each attempt has a fresh invoice).
 /// Not a state change, so it doesn't go through [`transition`].
 pub async fn set_payment_hash(

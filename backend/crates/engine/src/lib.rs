@@ -7,11 +7,13 @@
 mod comments;
 mod error;
 mod events;
+mod expiry;
 mod holds;
 pub mod jobs;
 mod pay;
 mod replies;
 mod verify;
+mod waits;
 
 use std::sync::Arc;
 
@@ -22,6 +24,7 @@ use mergetip_payer::{ReceiverEndpoint, WalletConnector};
 use mergetip_store::PgPool;
 
 pub use error::EngineError;
+pub use expiry::{EXPIRY_BATCH, ExpiryReport};
 pub use pay::{MAX_PAYMENT_ATTEMPTS, PAY_TIMEOUT, ReconcileOutcome};
 pub use verify::{Decision, decide};
 

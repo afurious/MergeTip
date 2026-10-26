@@ -50,7 +50,7 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 
 - [x] Pledges, confirmations and notifications RFC
 - [x] 4.1 On-merge holds
-- [ ] 4.2 Awaiting sender
+- [x] 4.2 Awaiting sender
 - [ ] 4.3 Pledges and claims
 - [ ] 4.4 High-value confirmation
 - [ ] 4.5 `notify` crate

@@ -5,6 +5,7 @@ use std::time::Duration;
 use axum::{Json, extract::State, http::StatusCode};
 use mergetip_core::Sats;
 use mergetip_crypto::Redacted;
+use mergetip_engine::jobs::{self, ResumeSenderTips};
 use mergetip_payer::{LightningAddress, ResolveError, nwc::PayError};
 use mergetip_store::{
     users::{self, SettingsUpdate},
@@ -91,9 +92,11 @@ pub async fn connect_wallet(
             format!("wallet_connections.nwc_uri:{id}").as_bytes(),
         )
         .map_err(ApiError::internal)?;
-    let mut conn = state.pool().acquire().await.map_err(ApiError::internal)?;
+    // The wallet and the job that resumes the sender's waiting tips commit together, so a
+    // crash can't leave tips waiting on a wallet that is already connected.
+    let mut tx = state.pool().begin().await.map_err(ApiError::internal)?;
     wallets::replace(
-        &mut conn,
+        &mut tx,
         &NewConnection {
             id,
             user_id: auth.user.id,
@@ -106,6 +109,14 @@ pub async fn connect_wallet(
         state.clock().now(),
     )
     .await?;
+    jobs::enqueue(
+        &mut tx,
+        &ResumeSenderTips {
+            user_id: auth.user.id,
+        },
+    )
+    .await?;
+    tx.commit().await.map_err(ApiError::internal)?;
     tracing::info!(user_id = %auth.user.id, wallet = %info.wallet_pubkey, "wallet connected");
     me::build(&state, auth.user.id).await.map(Json)
 }

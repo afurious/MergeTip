@@ -28,7 +28,7 @@ use mergetip_worker::{
     Runner, RunnerConfig,
     handlers::{
         PayTipHandler, PostReplyHandler, ProcessEventHandler, ReconcilePaymentHandler,
-        VerifyTipHandler,
+        ResolveHeldHandler, ResumeSenderTipsHandler, VerifyTipHandler,
     },
 };
 use nostr_sdk::prelude::MockRelay;
@@ -218,6 +218,8 @@ impl System {
         .register(VerifyTipHandler(engine.clone()))
         .register(PostReplyHandler(engine.clone()))
         .register(PayTipHandler(engine.clone()))
+        .register(ResolveHeldHandler(engine.clone()))
+        .register(ResumeSenderTipsHandler(engine.clone()))
         .register(ReconcilePaymentHandler(engine));
         let shutdown = CancellationToken::new();
         let task = tokio::spawn(runner.run(shutdown.clone()));
@@ -312,6 +314,12 @@ impl System {
     /// reviewer signs in and links `{address_user}@<lnurl server>`. Returns the maintainer's
     /// session.
     async fn onboard(&self, address_user: &str) -> String {
+        self.link_address(address_user).await;
+        self.connect_wallet().await
+    }
+
+    /// The maintainer signs in, connects the mock wallet and sets caps. Returns their session.
+    async fn connect_wallet(&self) -> String {
         let maintainer = self.sign_in("maintainer-code").await;
         let (status, me) = self
             .write(
@@ -332,7 +340,11 @@ impl System {
             )
             .await;
         assert_eq!(status, StatusCode::OK, "{me}");
+        maintainer
+    }
 
+    /// The reviewer signs in and links `{address_user}@<lnurl server>`. Returns their session.
+    async fn link_address(&self, address_user: &str) -> String {
         let reviewer = self.sign_in("reviewer-code").await;
         let address = format!("{address_user}@{}", self.lnurl.address());
         let (status, me) = self
@@ -345,7 +357,7 @@ impl System {
             .await;
         assert_eq!(status, StatusCode::OK, "{me}");
         assert_eq!(me["lightning_address"], address);
-        maintainer
+        reviewer
     }
 
     /// Sends a signed delivery to the api, as GitHub would.
@@ -583,6 +595,48 @@ async fn maintainer_tips_a_reviewer_from_their_own_wallet(pool: PgPool) -> sqlx:
 
     let me = system.me(&maintainer).await;
     assert_eq!(me["caps"]["spent_today_sats"], 2_100);
+
+    worker.stop().await;
+    Ok(())
+}
+
+/// Journey C: the tip arrives before the sender has a wallet, waits, and is paid once they
+/// connect one in the web app.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn a_tip_waits_for_the_senders_wallet_then_pays(pool: PgPool) -> sqlx::Result<()> {
+    let system = System::start(pool).await;
+    system.link_address("reviewer").await;
+    let worker = system.worker(WorkerOptions::default());
+
+    let status = system
+        .deliver("delivery-1", "/tip @reviewer 2100 for the review")
+        .await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    system.wait_for_idle_queue().await;
+    let state = sqlx::query_scalar!("SELECT state FROM tips")
+        .fetch_one(&system.pool)
+        .await?;
+    assert_eq!(state, "awaiting_sender");
+    assert!(
+        system
+            .comments()
+            .await
+            .iter()
+            .any(|body| body.starts_with("🔌 @maintainer, connect your wallet")),
+        "connect prompt posted"
+    );
+    assert!(system.wallet.paid_hashes().is_empty());
+
+    system.connect_wallet().await;
+    system.wait_for_idle_queue().await;
+    let tip = sqlx::query!("SELECT state, payment_hash FROM tips")
+        .fetch_one(&system.pool)
+        .await?;
+    assert_eq!(tip.state, "paid");
+    assert_eq!(
+        system.wallet.paid_hashes(),
+        [tip.payment_hash.expect("payment hash")]
+    );
 
     worker.stop().await;
     Ok(())
