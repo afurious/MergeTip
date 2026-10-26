@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT count(*) AS \"n!\" FROM (\n            SELECT tip_id FROM payment_attempts WHERE status = 'succeeded'\n            GROUP BY tip_id HAVING count(*) > 1\n        ) settled\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "n!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d29d58b52a0ba44685258c9c331534ed84ab67e25e43377f84f5e02baaf8ae8c"
+}

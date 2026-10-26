@@ -232,6 +232,7 @@ impl Engine {
                 users::set_last_email_sent_at(&mut *tx, user_id, now).await?;
                 tips::mark_notified(&mut *tx, &ids, now, "sent").await?;
                 tx.commit().await?;
+                metrics::counter!("emails_total", "status" => "sent").increment(1);
                 tracing::info!(%user_id, tag, tips = ids.len(), "pledge email sent");
             }
             Err(err) if err.is_retryable() => {
@@ -245,6 +246,7 @@ impl Engine {
             }
             Err(err) => {
                 tracing::warn!(%user_id, error = %err, "pledge email refused");
+                metrics::counter!("emails_total", "status" => "failed").increment(1);
                 tips::mark_notified(&self.pool, &ids, now, "failed").await?;
             }
         }

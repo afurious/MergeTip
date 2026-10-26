@@ -1,6 +1,89 @@
-# Prometheus alert rules for MergeTip (implementation plan "Metrics and alerts").
-# Each alert links its runbook in docs/runbooks/.
+# Prometheus alert rules for MergeTip, one per row of the implementation plan's
+# "Metrics and alerts" table. Each alert names its runbook in docs/runbooks/.
+# Metrics are scraped from the api and worker METRICS_ADDR ports (internal only).
 groups:
+  - name: mergetip-payments
+    rules:
+      - alert: TipSuccessRateLow
+        expr: |
+          sum(increase(tips_final_total{state="paid"}[1h]))
+            / clamp_min(sum(increase(tips_final_total{state=~"paid|failed"}[1h])), 1)
+            < 0.95
+          and sum(increase(tips_final_total{state=~"paid|failed"}[1h])) >= 10
+        labels:
+          severity: sev2
+        annotations:
+          summary: "Under 95% of tips that reached payment were paid in the last hour"
+          runbook: docs/runbooks/payments-failing.md
+
+      - alert: TipLatencyHigh
+        expr: histogram_quantile(0.5, sum by (le) (rate(tip_e2e_seconds_bucket[15m]))) > 10
+        for: 15m
+        labels:
+          severity: sev3
+        annotations:
+          summary: "Median comment-to-receipt time is over 10 s"
+          runbook: docs/runbooks/payments-failing.md
+
+      - alert: TipPaidTwice
+        expr: max(tips_settled_more_than_once) > 0
+        labels:
+          severity: sev1
+        annotations:
+          summary: "A tip has two or more settled payments (double-pay guard breached)"
+          runbook: docs/runbooks/disable-payments.md
+
+      - alert: NwcTimeoutsHigh
+        expr: |
+          sum(increase(nwc_errors_total{code="TIMEOUT"}[15m]))
+            / clamp_min(sum(increase(payment_attempts_per_tip_count[15m])) + sum(increase(nwc_errors_total[15m])), 1)
+            > 0.10
+        labels:
+          severity: sev3
+        annotations:
+          summary: "Over 10% of wallet payments timed out in 15 min (relay or wallet trouble)"
+          runbook: docs/runbooks/relay-outage.md
+
+  - name: mergetip-platform
+    rules:
+      - alert: WebhookAckSlow
+        expr: histogram_quantile(0.99, sum by (le) (rate(webhook_ack_seconds_bucket{source="github"}[5m]))) > 1
+        for: 5m
+        labels:
+          severity: sev2
+        annotations:
+          summary: "p99 GitHub webhook acknowledgement is over 1 s (GitHub retries and disables slow hooks)"
+          runbook: docs/runbooks/github-outage.md
+
+      - alert: JobQueueStalled
+        expr: max(jobs_oldest_age_seconds) > 300
+        labels:
+          severity: sev2
+        annotations:
+          summary: "The oldest ready job has waited over 5 minutes"
+          runbook: docs/runbooks/payments-failing.md
+
+      - alert: GitHubRateLimitLow
+        expr: min by (installation) (github_ratelimit_remaining / github_ratelimit_limit) < 0.10
+        labels:
+          severity: sev3
+        annotations:
+          summary: "Installation {{ $labels.installation }} has under 10% of its GitHub API quota left"
+          runbook: docs/runbooks/github-outage.md
+
+  - name: mergetip-notifications
+    rules:
+      - alert: EmailBounceRateHigh
+        expr: |
+          sum(increase(emails_total{status="bounced"}[1d]))
+            / clamp_min(sum(increase(emails_total{status="sent"}[1d])), 1)
+            > 0.05
+        labels:
+          severity: sev3
+        annotations:
+          summary: "Over 5% of pledge emails bounced today"
+          runbook: docs/runbooks/payments-failing.md
+
   - name: mergetip-fiat
     rules:
       - alert: FiatPayoutStuck

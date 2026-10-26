@@ -261,6 +261,7 @@ impl Engine {
             Ok(proof) => self.mark_paid(tip, attempt, &proof.preimage).await,
             Err(PayError::Wallet { code, message }) => {
                 tracing::info!(tip_id = %tip.id, %code, message, "wallet refused the payment");
+                metrics::counter!("nwc_errors_total", "code" => code.as_str()).increment(1);
                 self.finish_attempt(attempt, AttemptStatus::Failed, Some(code.as_str()))
                     .await?;
                 let err = PayError::Wallet { code, message };
@@ -270,6 +271,12 @@ impl Engine {
             // Sent, but no usable answer: the payment may have happened. Reconcile.
             Err(err @ (PayError::Timeout | PayError::Relay(_) | PayError::Protocol(_))) => {
                 tracing::warn!(tip_id = %tip.id, error = %err, "payment outcome unknown");
+                let code = match err {
+                    PayError::Timeout => "TIMEOUT",
+                    PayError::Relay(_) => "RELAY",
+                    _ => "PROTOCOL",
+                };
+                metrics::counter!("nwc_errors_total", "code" => code).increment(1);
                 let mut tx = self.pool.begin().await?;
                 let attempt = payment_attempts::set_status(
                     &mut *tx,
@@ -340,6 +347,8 @@ impl Engine {
                 "preimage does not match the payment hash".into(),
             ));
         }
+        let attempts = payment_attempts::count_for_tip(&self.pool, tip.id).await?;
+        metrics::histogram!("payment_attempts_per_tip").record(attempts as f64);
         // A fiat payout is only `paid` once Bitnob confirms delivery (webhook); paying its
         // invoice moves it to `fiat_processing`.
         let fiat = tips::get(&self.pool, tip.id)

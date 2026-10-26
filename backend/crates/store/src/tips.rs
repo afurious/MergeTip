@@ -376,6 +376,13 @@ pub async fn transition(
     .await?;
     tx.commit().await?;
     tracing::debug!(tip_id = %id, %from, %to, "tip transitioned");
+    if to.is_final() {
+        metrics::counter!("tips_final_total", "state" => to.as_str()).increment(1);
+    }
+    if to == TipState::Paid {
+        let seconds = (OffsetDateTime::now_utc() - row.created_at).as_seconds_f64();
+        metrics::histogram!("tip_e2e_seconds").record(seconds.max(0.0));
+    }
     row.try_into()
 }
 

@@ -152,3 +152,43 @@ async fn bitnob_events_are_deduplicated(pool: PgPool) -> sqlx::Result<()> {
     assert!(processed.is_none());
     Ok(())
 }
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn queue_health_counts_ready_and_dead_jobs(pool: PgPool) -> sqlx::Result<()> {
+    use mergetip_store::{jobs, observability};
+    let empty = observability::queue_health(&pool).await.unwrap();
+    assert_eq!((empty.ready, empty.dead), (0, 0));
+    assert_eq!(empty.oldest_age_seconds, 0.0);
+
+    let mut conn = pool.acquire().await?;
+    let past = OffsetDateTime::now_utc() - time::Duration::minutes(10);
+    jobs::enqueue(&mut conn, &jobs::NewJob::new("a", json!({})).run_at(past))
+        .await
+        .unwrap();
+    jobs::enqueue(&mut conn, &jobs::NewJob::new("b", json!({})))
+        .await
+        .unwrap();
+    jobs::enqueue(
+        &mut conn,
+        &jobs::NewJob::new("later", json!({}))
+            .run_at(OffsetDateTime::now_utc() + time::Duration::hours(1)),
+    )
+    .await
+    .unwrap();
+    sqlx::query!("INSERT INTO jobs (kind, dead_at) VALUES ('dead', now())")
+        .execute(&pool)
+        .await?;
+    let health = observability::queue_health(&pool).await.unwrap();
+    assert_eq!(health.ready, 2, "due and unclaimed only");
+    assert_eq!(health.dead, 1);
+    assert!(
+        health.oldest_age_seconds >= 590.0,
+        "{}",
+        health.oldest_age_seconds
+    );
+    assert_eq!(
+        observability::multiply_settled_tips(&pool).await.unwrap(),
+        0
+    );
+    Ok(())
+}

@@ -39,7 +39,13 @@ async fn main() -> anyhow::Result<()> {
 async fn serve() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     let config = Arc::new(ApiConfig::from_env(&ProcessEnv).context("invalid configuration")?);
-    telemetry::init(config.app_env);
+    let _sentry = telemetry::init(
+        config.app_env,
+        config.sentry_dsn.as_ref().map(|dsn| dsn.expose().as_str()),
+    );
+    if let Some(addr) = config.metrics_addr {
+        mergetip_runtime::metrics::install(addr).context("cannot start the metrics exporter")?;
+    }
 
     let pool = db::connect(config.database_url.expose(), 10)
         .await

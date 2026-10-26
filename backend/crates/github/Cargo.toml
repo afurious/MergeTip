@@ -11,6 +11,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+metrics.workspace = true
 mergetip-core.workspace = true
 mergetip-crypto.workspace = true
 async-trait.workspace = true

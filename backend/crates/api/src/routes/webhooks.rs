@@ -43,21 +43,33 @@ pub async fn github(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<StatusCode, ApiError> {
-    let signature = header(&headers, SIGNATURE).ok_or_else(invalid_signature)?;
+    let started = std::time::Instant::now();
+    let result = accept_github(&state, &headers, &body).await;
+    metrics::histogram!("webhook_ack_seconds", "source" => "github")
+        .record(started.elapsed().as_secs_f64());
+    result
+}
+
+async fn accept_github(
+    state: &AppState,
+    headers: &HeaderMap,
+    body: &Bytes,
+) -> Result<StatusCode, ApiError> {
+    let signature = header(headers, SIGNATURE).ok_or_else(invalid_signature)?;
     mergetip_crypto::verify_github_signature(
         state.config().github_webhook_secret.expose().as_bytes(),
-        &body,
+        body,
         signature,
     )
     .map_err(|_| invalid_signature())?;
 
-    let event = header(&headers, EVENT).ok_or_else(|| missing_header(EVENT))?;
-    let delivery_id = header(&headers, DELIVERY).ok_or_else(|| missing_header(DELIVERY))?;
+    let event = header(headers, EVENT).ok_or_else(|| missing_header(EVENT))?;
+    let delivery_id = header(headers, DELIVERY).ok_or_else(|| missing_header(DELIVERY))?;
     let span = tracing::Span::current();
     span.record("delivery_id", delivery_id);
     span.record("event", event);
 
-    let payload: serde_json::Value = serde_json::from_slice(&body).map_err(|_| {
+    let payload: serde_json::Value = serde_json::from_slice(body).map_err(|_| {
         ApiError::new(
             StatusCode::BAD_REQUEST,
             "invalid_payload",
@@ -180,6 +192,7 @@ pub async fn resend(
     };
     let tips = mergetip_store::email_messages::tips_for(state.pool(), &email_id).await?;
     let changed = mergetip_store::tips::advance_email_status(state.pool(), &tips, status).await?;
+    metrics::counter!("emails_total", "status" => status).increment(1);
     tracing::info!(event = %event.kind, changed, "email delivery event");
     Ok(StatusCode::OK)
 }

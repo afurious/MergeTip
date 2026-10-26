@@ -25,7 +25,13 @@ async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     let cli = Cli::parse();
     let config = WorkerConfig::from_env(&ProcessEnv).context("invalid configuration")?;
-    telemetry::init(config.app_env);
+    let _sentry = telemetry::init(
+        config.app_env,
+        config.sentry_dsn.as_ref().map(|dsn| dsn.expose().as_str()),
+    );
+    if let Some(addr) = config.metrics_addr {
+        mergetip_runtime::metrics::install(addr).context("cannot start the metrics exporter")?;
+    }
 
     let pool = db::connect(config.database_url.expose(), config.pool_size())
         .await
@@ -92,6 +98,11 @@ async fn main() -> anyhow::Result<()> {
     if config.stub_payer {
         tracing::warn!("STUB_PAYER is on: tips are marked paid without moving any money");
     }
+    let shutdown = shutdown::on_signal();
+    tokio::spawn(mergetip_worker::sampler::run(
+        pool.clone(),
+        shutdown.clone(),
+    ));
     Runner::new(pool, clock, config.runner)
         .context("cannot initialise the job runner")?
         .register(NoopHandler)
@@ -106,7 +117,7 @@ async fn main() -> anyhow::Result<()> {
         .register(ExpireTipsHandler(engine.clone()))
         .register(ProcessBitnobEventHandler(engine.clone()))
         .register(ReconcilePaymentHandler(engine))
-        .run(shutdown::on_signal())
+        .run(shutdown)
         .await;
     Ok(())
 }
