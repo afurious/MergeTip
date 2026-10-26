@@ -8,7 +8,7 @@ FRONTEND := frontend
 export DATABASE_URL SMEE_URL
 
 .PHONY: help bootstrap up down dev dev-api dev-worker dev-web dev-app smee migrate migrate-new \
-        sqlx-prepare openapi fmt lint test check check-backend clean
+        sqlx-prepare openapi fmt lint test check check-backend coverage clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(firstword $(MAKEFILE_LIST)) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -78,6 +78,10 @@ check-backend: ## Backend gate: fmt, clippy, tests, sqlx offline data (needs DAT
 	cd $(BACKEND) && cargo clippy --workspace --all-targets -- -D warnings
 	cd $(BACKEND) && cargo test --workspace
 	cd $(BACKEND) && cargo sqlx prepare --workspace --check -- --all-targets
+
+coverage: ## Line coverage per crate, checked against the CI floors (needs DATABASE_URL)
+	cd $(BACKEND) && cargo llvm-cov --workspace --all-features --no-report
+	cd $(BACKEND) && cargo llvm-cov report --json --summary-only | python3 scripts/coverage_gate.py
 
 test: ## Run all tests
 	cd $(BACKEND) && cargo test --workspace

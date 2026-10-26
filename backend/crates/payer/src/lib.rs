@@ -120,3 +120,41 @@ pub trait SenderWallet: Send + Sync {
 pub trait WalletConnector: Send + Sync {
     async fn connect(&self, nwc_uri: &str) -> Result<Box<dyn SenderWallet>, nwc::PayError>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn networks_parse_print_and_map_to_invoice_currencies() {
+        let table = [
+            (
+                "bitcoin",
+                Network::Bitcoin,
+                lightning_invoice::Currency::Bitcoin,
+            ),
+            (
+                "testnet",
+                Network::Testnet,
+                lightning_invoice::Currency::BitcoinTestnet,
+            ),
+            (
+                "signet",
+                Network::Signet,
+                lightning_invoice::Currency::Signet,
+            ),
+            (
+                "regtest",
+                Network::Regtest,
+                lightning_invoice::Currency::Regtest,
+            ),
+        ];
+        for (name, network, currency) in table {
+            assert_eq!(name.parse::<Network>(), Ok(network));
+            assert_eq!(network.to_string(), name);
+            assert_eq!(network.currency(), currency);
+        }
+        assert_eq!("mainnet".parse::<Network>(), Ok(Network::Bitcoin));
+        assert!("liquid".parse::<Network>().unwrap_err().contains("liquid"));
+    }
+}

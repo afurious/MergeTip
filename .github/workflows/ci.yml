@@ -65,6 +65,43 @@ jobs:
         with:
           manifest-path: backend/Cargo.toml
 
+  coverage:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mergetip
+          POSTGRES_PASSWORD: mergetip
+          POSTGRES_DB: mergetip
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mergetip" --health-interval 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://mergetip:mergetip@localhost:5432/mergetip
+      SQLX_OFFLINE: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      # The whole workspace's tests count toward each crate (the engine and e2e tests exercise
+      # the payer); the gate then checks each crate's own src/ against its floor.
+      - run: cargo llvm-cov --workspace --all-features --no-report
+      - name: Coverage floors (parser, core, payer ≥ 90%; github ≥ 70%)
+        run: cargo llvm-cov report --json --summary-only | python3 scripts/coverage_gate.py
+
   frontend:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
