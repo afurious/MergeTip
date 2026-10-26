@@ -18,6 +18,7 @@ use std::time::Duration;
 use axum::{
     Router,
     body::to_bytes,
+    extract::DefaultBodyLimit,
     http::{HeaderName, Method, StatusCode, header},
     middleware,
     response::{IntoResponse, Response},
@@ -37,6 +38,10 @@ use crate::{ApiError, AppState};
 const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
 /// GitHub webhook payloads can be several megabytes; nothing else comes close.
 const BODY_LIMIT_BYTES: usize = 5 * 1024 * 1024;
+/// Everything a client sends is small JSON.
+const CLIENT_BODY_LIMIT_BYTES: usize = 64 * 1024;
+/// Resend and Bitnob events are small; a big one is not theirs.
+const PROVIDER_WEBHOOK_LIMIT_BYTES: usize = 256 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub fn router(state: AppState) -> Router {
@@ -100,9 +105,19 @@ pub fn router(state: AppState) -> Router {
             "/email/unsubscribe",
             get(email::unsubscribe_link).post(email::unsubscribe_one_click),
         )
-        .route("/webhooks/github", post(webhooks::github))
-        .route("/webhooks/resend", post(webhooks::resend))
-        .route("/webhooks/bitnob", post(webhooks::bitnob));
+        .layer(DefaultBodyLimit::max(CLIENT_BODY_LIMIT_BYTES))
+        .route(
+            "/webhooks/github",
+            post(webhooks::github).layer(DefaultBodyLimit::max(BODY_LIMIT_BYTES)),
+        )
+        .route(
+            "/webhooks/resend",
+            post(webhooks::resend).layer(DefaultBodyLimit::max(PROVIDER_WEBHOOK_LIMIT_BYTES)),
+        )
+        .route(
+            "/webhooks/bitnob",
+            post(webhooks::bitnob).layer(DefaultBodyLimit::max(PROVIDER_WEBHOOK_LIMIT_BYTES)),
+        );
 
     // Layers run outermost-last. CORS wraps every layer that can answer on its own (body limit,
     // timeout) and the error normaliser, so even those responses reach the browser readable and
@@ -124,7 +139,12 @@ pub fn router(state: AppState) -> Router {
             StatusCode::SERVICE_UNAVAILABLE,
             REQUEST_TIMEOUT,
         ))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            crate::hardening::rate_limit,
+        ))
         .layer(middleware::map_response(json_error_body))
+        .layer(middleware::from_fn(crate::hardening::security_headers))
         .layer(cors)
         .layer(PropagateRequestIdLayer::new(REQUEST_ID))
         .layer(TraceLayer::new_for_http())

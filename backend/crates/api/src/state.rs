@@ -19,6 +19,7 @@ struct Inner {
     config: Arc<ApiConfig>,
     clock: Arc<dyn Clock>,
     services: Services,
+    rate_limits: crate::hardening::RateLimits,
 }
 
 /// External integrations, behind traits so tests can substitute them.
@@ -46,6 +47,7 @@ impl AppState {
             config,
             clock,
             services,
+            rate_limits: crate::hardening::RateLimits::default(),
         }))
     }
 
@@ -67,6 +69,10 @@ impl AppState {
 
     pub fn fiat(&self) -> Option<&dyn FiatProvider> {
         self.0.services.fiat.as_deref()
+    }
+
+    pub fn rate_limits(&self) -> &crate::hardening::RateLimits {
+        &self.0.rate_limits
     }
 
     pub fn pool(&self) -> &PgPool {

@@ -11,6 +11,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+governor.workspace = true
 metrics.workspace = true
 mergetip-core.workspace = true
 mergetip-github.workspace = true

@@ -86,9 +86,12 @@ async fn serve() -> anyhow::Result<()> {
     tracing::info!(addr = %config.addr, env = %config.app_env, "mergetip-api listening");
 
     let shutdown = shutdown::on_signal();
-    axum::serve(listener, router(state))
-        .with_graceful_shutdown(shutdown.cancelled_owned())
-        .await
-        .context("server error")?;
+    axum::serve(
+        listener,
+        router(state).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown.cancelled_owned())
+    .await
+    .context("server error")?;
     Ok(())
 }
