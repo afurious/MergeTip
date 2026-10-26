@@ -103,6 +103,11 @@ impl Engine {
             ),
             TipMessage::Pledged => replies::pledged(&context, &self.link("/settings/receive")),
             TipMessage::Held => replies::held(&context),
+            TipMessage::Cancelled => replies::cancelled(
+                tip.error_code.as_deref().unwrap_or("unknown"),
+                &context,
+                tip.receiver_id.is_some(),
+            ),
             TipMessage::Paid => {
                 replies::receipt(&context, tip.payment_hash.as_deref().unwrap_or_default())
             }

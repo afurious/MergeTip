@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use mergetip_engine::{
     Engine, EngineError, ReconcileOutcome,
-    jobs::{JobPayload, PayTip, PostReply, ProcessEvent, ReconcilePayment, VerifyTip},
+    jobs::{JobPayload, PayTip, PostReply, ProcessEvent, ReconcilePayment, ResolveHeld, VerifyTip},
 };
 use mergetip_store::jobs::Job;
 
@@ -65,6 +65,13 @@ engine_handler!(
     PostReplyHandler,
     PostReply,
     |engine, payload| engine.post_reply(&payload)
+);
+
+engine_handler!(
+    /// Pays or cancels a pull request's on-merge holds once it closes.
+    ResolveHeldHandler,
+    ResolveHeld,
+    |engine, payload| engine.resolve_held(&payload)
 );
 
 /// Pays a tip. On the job's last attempt the engine fails the tip rather than asking for

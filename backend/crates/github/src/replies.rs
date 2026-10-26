@@ -41,6 +41,32 @@ pub fn held(tip: &TipContext<'_>) -> String {
     )
 }
 
+/// A status line for a tip that ended before any money moved, keyed by its `error_code`.
+/// `receiver_verified` is false for tips that never passed verification (a sender who never
+/// connected a wallet): their receiver came from comment text and must not be mentioned.
+pub fn cancelled(code: &str, tip: &TipContext<'_>, receiver_verified: bool) -> String {
+    let receiver = if receiver_verified {
+        format!("@{}", tip.receiver)
+    } else {
+        format!("`{}`", code_span(tip.receiver))
+    };
+    let reason = match code {
+        "pr_closed" => "PR closed without merge",
+        "sender_timeout" => "no wallet was connected within 24 h",
+        "confirmation_timeout" => "it wasn't confirmed within 1 hour",
+        "cancelled_by_sender" => "the sender cancelled it",
+        "account_deleted" => "the sender closed their MergeTip account",
+        "no_contribution" | "unknown_user" | "self_tip" | "bot_receiver" | "account_too_new" => {
+            "the contribution couldn't be verified when the PR merged"
+        }
+        _ => "it can no longer be sent",
+    };
+    format!(
+        "⏳ @{}'s **{}** tip to {receiver} was cancelled: {reason}. Nothing was charged.",
+        tip.sender, tip.amount
+    )
+}
+
 /// Sent before verification, so the receiver is not mentioned.
 pub fn connect_wallet(tip: &TipContext<'_>, link: &str) -> String {
     format!(
@@ -278,6 +304,31 @@ mod tests {
             ),
         ];
         insta::assert_snapshot!(rendered.join("\n\n"));
+    }
+
+    #[test]
+    fn cancellation_messages() {
+        let mut rendered: Vec<String> = [
+            "pr_closed",
+            "sender_timeout",
+            "confirmation_timeout",
+            "cancelled_by_sender",
+            "account_deleted",
+            "no_contribution",
+            "something_new",
+        ]
+        .iter()
+        .map(|code| format!("{code}: {}", cancelled(code, &tip(None), true)))
+        .collect();
+        let unverified = TipContext {
+            receiver: "some`one",
+            ..tip(None)
+        };
+        rendered.push(format!(
+            "unverified: {}",
+            cancelled("sender_timeout", &unverified, false)
+        ));
+        insta::assert_snapshot!(rendered.join("\n"));
     }
 
     #[test]

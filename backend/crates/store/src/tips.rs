@@ -382,6 +382,32 @@ pub async fn count_for_pair_in_thread(
     Ok(count)
 }
 
+/// Tips in `state` on one thread, oldest first (e.g. every `held` tip when the PR closes).
+pub async fn list_in_thread(
+    exec: impl PgExecutor<'_>,
+    repo: &str,
+    thread_number: u32,
+    state: TipState,
+) -> StoreResult<Vec<Tip>> {
+    let thread_number = i32::try_from(thread_number).map_err(corrupt)?;
+    sqlx::query_as!(
+        TipRow,
+        r#"
+        SELECT * FROM tips
+        WHERE repo = $1 AND thread_number = $2 AND state = $3
+        ORDER BY created_at, command_index
+        "#,
+        repo,
+        thread_number,
+        state.as_str(),
+    )
+    .fetch_all(exec)
+    .await?
+    .into_iter()
+    .map(TryInto::try_into)
+    .collect()
+}
+
 /// Records the payment hash of the tip's current attempt (each attempt has a fresh invoice).
 /// Not a state change, so it doesn't go through [`transition`].
 pub async fn set_payment_hash(

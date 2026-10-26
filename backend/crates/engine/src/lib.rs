@@ -7,6 +7,7 @@
 mod comments;
 mod error;
 mod events;
+mod holds;
 pub mod jobs;
 mod pay;
 mod replies;

@@ -71,6 +71,19 @@ impl JobPayload for PayTip {
     const KIND: &'static str = "pay_tip";
 }
 
+/// Resolve the `held` (on-merge) tips of one pull request against its current state on GitHub:
+/// pay them if it merged, cancel them if it closed unmerged, leave them if it is still open.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResolveHeld {
+    pub installation: GithubInstallationId,
+    pub repo: String,
+    pub number: u32,
+}
+
+impl JobPayload for ResolveHeld {
+    const KIND: &'static str = "resolve_held";
+}
+
 /// Settle the fate of a payment attempt whose outcome is unknown (the wallet didn't answer).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReconcilePayment {
@@ -124,6 +137,8 @@ pub enum TipMessage {
     Pledged,
     /// A verified tip couldn't be paid (`tips.error_code` says why).
     Failed,
+    /// The tip ended before any money moved (`tips.error_code` says why).
+    Cancelled,
 }
 
 impl TipMessage {
@@ -131,7 +146,7 @@ impl TipMessage {
     /// must act on are posted as new comments, because GitHub does not reliably notify people
     /// mentioned in an edited comment.
     pub const fn is_status(self) -> bool {
-        matches!(self, Self::Held | Self::Paid)
+        matches!(self, Self::Held | Self::Paid | Self::Cancelled)
     }
 
     pub const fn as_str(self) -> &'static str {
@@ -143,6 +158,7 @@ impl TipMessage {
             Self::Paid => "paid",
             Self::Pledged => "pledged",
             Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
         }
     }
 }

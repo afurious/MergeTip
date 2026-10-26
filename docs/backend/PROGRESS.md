@@ -49,7 +49,7 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 ## M4: Edge flows and notifications
 
 - [x] Pledges, confirmations and notifications RFC
-- [ ] 4.1 On-merge holds
+- [x] 4.1 On-merge holds
 - [ ] 4.2 Awaiting sender
 - [ ] 4.3 Pledges and claims
 - [ ] 4.4 High-value confirmation

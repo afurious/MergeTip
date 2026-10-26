@@ -296,6 +296,41 @@ pub(crate) async fn reject_verifying(
     Ok(())
 }
 
+/// Cancels a tip in `from` before any money moved: records why, and adds a line to the thread's
+/// status comment. Returns `false` (and writes nothing) when the tip already left `from`, so a
+/// timer or redelivery that fires twice is a no-op. The one place cancellation side effects are
+/// defined.
+pub(crate) async fn cancel_tip(
+    tx: &mut PgConnection,
+    tip: &Tip,
+    from: TipState,
+    code: &str,
+) -> Result<bool, EngineError> {
+    let cancelled = match tips::transition(
+        tx,
+        tip.id,
+        from,
+        TipState::Cancelled,
+        &TipPatch::error(code, None),
+        json!({ "reason": code }),
+    )
+    .await
+    {
+        Ok(tip) => tip,
+        Err(mergetip_store::StoreError::Conflict) => return Ok(false),
+        Err(other) => return Err(other.into()),
+    };
+    let installation = installations::get(&mut *tx, cancelled.installation_id).await?;
+    enqueue_tip_reply(
+        tx,
+        installation.github_installation_id,
+        &cancelled,
+        TipMessage::Cancelled,
+    )
+    .await?;
+    Ok(true)
+}
+
 /// Queues a message about `tip` in its thread, keyed per tip and message kind.
 pub(crate) async fn enqueue_tip_reply(
     tx: &mut PgConnection,

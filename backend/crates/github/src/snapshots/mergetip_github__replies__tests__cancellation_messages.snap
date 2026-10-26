@@ -1,0 +1,12 @@
+---
+source: crates/github/src/replies.rs
+expression: "rendered.join(\"\\n\")"
+---
+pr_closed: ⏳ @maintainer's **2,100 sats** tip to @reviewer was cancelled: PR closed without merge. Nothing was charged.
+sender_timeout: ⏳ @maintainer's **2,100 sats** tip to @reviewer was cancelled: no wallet was connected within 24 h. Nothing was charged.
+confirmation_timeout: ⏳ @maintainer's **2,100 sats** tip to @reviewer was cancelled: it wasn't confirmed within 1 hour. Nothing was charged.
+cancelled_by_sender: ⏳ @maintainer's **2,100 sats** tip to @reviewer was cancelled: the sender cancelled it. Nothing was charged.
+account_deleted: ⏳ @maintainer's **2,100 sats** tip to @reviewer was cancelled: the sender closed their MergeTip account. Nothing was charged.
+no_contribution: ⏳ @maintainer's **2,100 sats** tip to @reviewer was cancelled: the contribution couldn't be verified when the PR merged. Nothing was charged.
+something_new: ⏳ @maintainer's **2,100 sats** tip to @reviewer was cancelled: it can no longer be sent. Nothing was charged.
+unverified: ⏳ @maintainer's **2,100 sats** tip to `some'one` was cancelled: no wallet was connected within 24 h. Nothing was charged.

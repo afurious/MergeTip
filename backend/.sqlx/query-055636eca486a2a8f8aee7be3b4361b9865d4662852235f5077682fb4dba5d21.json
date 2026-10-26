@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO users (github_id, github_login) VALUES ($1, $2)\n               ON CONFLICT (github_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "055636eca486a2a8f8aee7be3b4361b9865d4662852235f5077682fb4dba5d21"
+}

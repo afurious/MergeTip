@@ -12,7 +12,7 @@ use mergetip_worker::{
     Runner, WorkerConfig,
     handlers::{
         NoopHandler, PayTipHandler, PostReplyHandler, ProcessEventHandler, ReconcilePaymentHandler,
-        VerifyTipHandler,
+        ResolveHeldHandler, VerifyTipHandler,
     },
 };
 
@@ -67,6 +67,7 @@ async fn main() -> anyhow::Result<()> {
         .register(VerifyTipHandler(engine.clone()))
         .register(PostReplyHandler(engine.clone()))
         .register(PayTipHandler(engine.clone()))
+        .register(ResolveHeldHandler(engine.clone()))
         .register(ReconcilePaymentHandler(engine))
         .run(shutdown::on_signal())
         .await;
