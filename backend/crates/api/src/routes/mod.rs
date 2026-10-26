@@ -7,7 +7,6 @@ pub(crate) mod confirmations;
 pub(crate) mod email;
 pub(crate) mod health;
 pub(crate) mod me;
-pub(crate) mod payouts;
 pub(crate) mod settings;
 pub(crate) mod tips;
 pub(crate) mod users;
@@ -40,7 +39,7 @@ const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
 const BODY_LIMIT_BYTES: usize = 5 * 1024 * 1024;
 /// Everything a client sends is small JSON.
 const CLIENT_BODY_LIMIT_BYTES: usize = 64 * 1024;
-/// Resend and Bitnob events are small; a big one is not theirs.
+/// Resend events are small; a big one is not theirs.
 const PROVIDER_WEBHOOK_LIMIT_BYTES: usize = 256 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -67,16 +66,6 @@ pub fn router(state: AppState) -> Router {
         .route("/me", get(me::get_me).delete(me::delete_me))
         .route("/me/tips", get(tips::list_my_tips))
         .route("/users/{login}/receive-status", get(users::receive_status))
-        .route("/payouts/countries", get(payouts::list_countries))
-        .route("/payouts/countries/{code}", get(payouts::country_form))
-        .route(
-            "/me/payout-methods",
-            get(payouts::list_methods).post(payouts::add_method),
-        )
-        .route(
-            "/me/payout-methods/{id}",
-            patch(payouts::update_method).delete(payouts::delete_method),
-        )
         .route("/tips/comment", post(compose::post_tip_comment))
         .route(
             "/me/wallet",
@@ -113,10 +102,6 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/webhooks/resend",
             post(webhooks::resend).layer(DefaultBodyLimit::max(PROVIDER_WEBHOOK_LIMIT_BYTES)),
-        )
-        .route(
-            "/webhooks/bitnob",
-            post(webhooks::bitnob).layer(DefaultBodyLimit::max(PROVIDER_WEBHOOK_LIMIT_BYTES)),
         );
 
     // Layers run outermost-last. CORS wraps every layer that can answer on its own (body limit,

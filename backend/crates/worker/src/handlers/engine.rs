@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use mergetip_engine::{
     Engine, EngineError, ReconcileOutcome,
     jobs::{
-        ExpireTips, JobPayload, NotifyPledge, PayTip, PostReply, ProcessBitnobEvent, ProcessEvent,
-        ReconcilePayment, ResolveHeld, ResumeSenderTips, SendDigest, VerifyTip,
+        ExpireTips, JobPayload, NotifyPledge, PayTip, PostReply, ProcessEvent, ReconcilePayment,
+        ResolveHeld, ResumeSenderTips, SendDigest, VerifyTip,
     },
 };
 use mergetip_store::jobs::Job;
@@ -96,13 +96,6 @@ engine_handler!(
     SendDigestHandler,
     SendDigest,
     |engine, payload| engine.send_digest(payload.user_id)
-);
-
-engine_handler!(
-    /// Applies a Bitnob payout webhook.
-    ProcessBitnobEventHandler,
-    ProcessBitnobEvent,
-    |engine, payload| engine.process_bitnob_event(&payload.event_id)
 );
 
 /// How soon a reconciliation that errored is tried again.

@@ -14,7 +14,6 @@ workspace = true
 metrics.workspace = true
 mergetip-core.workspace = true
 mergetip-crypto.workspace = true
-mergetip-fiat.workspace = true
 mergetip-notify.workspace = true
 mergetip-github.workspace = true
 mergetip-parser.workspace = true
@@ -23,7 +22,6 @@ mergetip-store.workspace = true
 hex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-rust_decimal.workspace = true
 sha2.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
@@ -33,7 +31,6 @@ uuid.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
-mergetip-fiat = { workspace = true, features = ["testing"] }
 futures.workspace = true
 mergetip-crypto.workspace = true
 mergetip-github = { workspace = true, features = ["testing"] }

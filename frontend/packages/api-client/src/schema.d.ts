@@ -226,42 +226,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/me/payout-methods": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The receiver's payout methods. */
-        get: operations["list_payout_methods"];
-        put?: never;
-        /** Add a payout method. The account is name-checked with the provider before it is saved. */
-        post: operations["add_payout_method"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/me/payout-methods/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove a payout method. */
-        delete: operations["delete_payout_method"];
-        options?: never;
-        head?: never;
-        /** Choose the default payout method. */
-        patch: operations["update_payout_method"];
-        trace?: never;
-    };
     "/v1/me/settings": {
         parameters: {
             query?: never;
@@ -314,40 +278,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/payouts/countries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Countries receivers can be paid in, with their currencies and rails. */
-        get: operations["list_payout_countries"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/payouts/countries/{code}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The receive form for a country, generated from Bitnob's requirements. */
-        get: operations["get_payout_country"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/tips/comment": {
         parameters: {
             query?: never;
@@ -376,26 +306,6 @@ export interface paths {
         get: operations["receive_status"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/webhooks/bitnob": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Receive a Bitnob payout event (RFC 0004): check the signature over the raw body, store it once
-         *     per `event_id`, and queue it. Processing happens in the worker.
-         */
-        post: operations["receive_bitnob_webhook"];
         delete?: never;
         options?: never;
         head?: never;
@@ -499,80 +409,12 @@ export interface components {
             lightning_address?: string | null;
             wallet: components["schemas"]["WalletStatus"];
         };
-        NewPayoutMethodRequest: {
-            /** @description Two-letter country code. */
-            country: string;
-            /** @description `bank` or `mobile_money`. */
-            destination_type: string;
-            /** @description The form's values, keyed by field `key` (e.g. `account_number`, `bank_code`, `network`). */
-            fields: Record<string, never>;
-            is_default?: boolean;
-        };
-        PayoutBank: {
-            code: string;
-            name: string;
-        };
-        PayoutCorridor: {
-            currency: string;
-            /** @description `bank` and/or `mobile_money`. */
-            destination_types: string[];
-        };
-        PayoutCountry: {
-            code: string;
-            corridors: components["schemas"]["PayoutCorridor"][];
-            name: string;
-        };
-        PayoutCountryForm: {
-            code: string;
-            forms: components["schemas"]["PayoutForm"][];
-            name: string;
-        };
-        PayoutField: {
-            component?: string | null;
-            key: string;
-            label: string;
-            /** Format: int32 */
-            max_length?: number | null;
-            /** Format: int32 */
-            min_length?: number | null;
-            options?: Record<string, never> | null;
-            pattern?: string | null;
-            placeholder?: string | null;
-            required: boolean;
-            type: string;
-        };
-        /** @description One rail's form: fields exactly as Bitnob requires them (FR-10.2). */
-        PayoutForm: {
-            /** @description Banks to pick from, for bank rails. */
-            banks: components["schemas"]["PayoutBank"][];
-            destination_type: string;
-            fields: components["schemas"]["PayoutField"][];
-            label?: string | null;
-        };
-        /** @description A saved payout method, as its owner sees it. */
-        PayoutMethodView: {
-            /** @description The account's last four characters, e.g. `****6789`. */
-            account: string;
-            country: string;
-            currency: string;
-            destination_type: string;
-            id: string;
-            is_default: boolean;
-            /** Format: date-time */
-            verified_at?: string | null;
-        };
         PostedTipComment: {
             comment_url: string;
         };
         /** @enum {string} */
-        ReceiveMethod: "lightning_address" | "fiat" | "none";
+        ReceiveMethod: "lightning_address" | "none";
         ReceiveStatus: {
-            /**
-             * Format: int64
-             * @description For `fiat`: the smallest tip the receiver's corridor pays out, estimated from the last
-             *     quoted rate. Absent when unknown.
-             */
-            fiat_min_sats?: number | null;
             login: string;
             method: components["schemas"]["ReceiveMethod"];
         };
@@ -597,7 +439,6 @@ export interface components {
              *     otherwise the sender or pledge deadline.
              */
             expires_at?: string | null;
-            fiat?: components["schemas"]["TipFiat"] | null;
             id: string;
             /** @enum {string} */
             kind: "now" | "on_merge";
@@ -631,16 +472,6 @@ export interface components {
         TipEnvelope: {
             tip: components["schemas"]["Tip"];
         };
-        /** @description What a fiat tip was quoted and how its payout is going. Amounts are decimal strings. */
-        TipFiat: {
-            amount?: string | null;
-            currency: string;
-            fees?: string | null;
-            /** @description Local currency per BTC. */
-            rate?: string | null;
-            /** @description `initiated`, `processing`, `success` or `failed`. */
-            status?: string | null;
-        };
         /** @enum {string} */
         TipKindBody: "now" | "on_merge";
         /** @description A page of the signed-in user's tips. */
@@ -650,18 +481,10 @@ export interface components {
             next_cursor?: string | null;
         };
         /**
-         * @description A tip's state as clients see it. Internal fiat states map onto the closest public one until
-         *     fiat payouts add their own values (M5).
+         * @description A tip's state as clients see it.
          * @enum {string}
          */
         TipState: "received" | "awaiting_sender" | "verifying" | "awaiting_confirmation" | "held" | "paying" | "paid" | "pledged" | "rejected" | "cancelled" | "expired" | "failed";
-        UpdatePayoutMethodRequest: {
-            /**
-             * @description Make this the default (tips are paid out here), or stop it being the default (tips go to
-             *     the Lightning address).
-             */
-            is_default: boolean;
-        };
         UserRef: {
             avatar_url: string;
             login: string;
@@ -1306,129 +1129,6 @@ export interface operations {
             };
         };
     };
-    list_payout_methods: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PayoutMethodView"][];
-                };
-            };
-        };
-    };
-    add_payout_method: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NewPayoutMethodRequest"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PayoutMethodView"];
-                };
-            };
-            /** @description `fiat_disabled` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            /** @description `account_lookup_failed` or `fiat_unsupported` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    delete_payout_method: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Removed */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description No such method */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    update_payout_method: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdatePayoutMethodRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PayoutMethodView"];
-                };
-            };
-            /** @description No such method */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
     update_settings: {
         parameters: {
             query?: never;
@@ -1555,74 +1255,6 @@ export interface operations {
             };
         };
     };
-    list_payout_countries: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PayoutCountry"][];
-                };
-            };
-            /** @description `fiat_disabled` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    get_payout_country: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Two-letter country code */
-                code: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PayoutCountryForm"];
-                };
-            };
-            /** @description `fiat_disabled` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            /** @description `fiat_unsupported` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
     post_tip_comment: {
         parameters: {
             query?: never;
@@ -1696,59 +1328,6 @@ export interface operations {
             };
             /** @description Not signed in */
             401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    receive_bitnob_webhook: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description HMAC-SHA512 of the raw body */
-                "x-bitnob-signature": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Raw event payload */
-        requestBody: {
-            content: {
-                "application/json": string;
-            };
-        };
-        responses: {
-            /** @description Stored for processing (or already stored) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description No event ID or not JSON */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            /** @description Signature missing or wrong */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            /** @description Bitnob webhooks aren't configured */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };

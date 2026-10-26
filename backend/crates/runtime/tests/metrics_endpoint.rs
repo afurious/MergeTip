@@ -14,7 +14,7 @@ async fn the_metrics_endpoint_serves_recorded_metrics() {
 
     metrics::counter!("tips_final_total", "state" => "paid").increment(2);
     metrics::histogram!("webhook_ack_seconds", "source" => "github").record(0.03);
-    metrics::gauge!("tips_in_state", "state" => "fiat_stuck").set(1.0);
+    metrics::gauge!("tips_in_state", "state" => "paying").set(1.0);
 
     let url = format!("http://{addr}/metrics");
     let mut body = String::new();
@@ -32,7 +32,7 @@ async fn the_metrics_endpoint_serves_recorded_metrics() {
         "{body}"
     );
     assert!(
-        body.contains(r#"tips_in_state{state="fiat_stuck"} 1"#),
+        body.contains(r#"tips_in_state{state="paying"} 1"#),
         "{body}"
     );
     // A real histogram with the configured buckets, so alerts can take quantiles.

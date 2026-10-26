@@ -21,14 +21,11 @@ pub enum TipState {
     Cancelled,
     Expired,
     Failed,
-    FiatProcessing,
-    FiatStuck,
-    Refunded,
 }
 
 impl TipState {
     /// Every state, in declaration order. Used by exhaustive tests and the schema `CHECK`.
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 12] = [
         Self::Received,
         Self::AwaitingSender,
         Self::Verifying,
@@ -41,9 +38,6 @@ impl TipState {
         Self::Cancelled,
         Self::Expired,
         Self::Failed,
-        Self::FiatProcessing,
-        Self::FiatStuck,
-        Self::Refunded,
     ];
 
     /// The `snake_case` form stored in `tips.state` and returned by the API.
@@ -61,9 +55,6 @@ impl TipState {
             Self::Cancelled => "cancelled",
             Self::Expired => "expired",
             Self::Failed => "failed",
-            Self::FiatProcessing => "fiat_processing",
-            Self::FiatStuck => "fiat_stuck",
-            Self::Refunded => "refunded",
         }
     }
 
@@ -71,12 +62,7 @@ impl TipState {
     pub const fn is_final(self) -> bool {
         matches!(
             self,
-            Self::Paid
-                | Self::Rejected
-                | Self::Cancelled
-                | Self::Expired
-                | Self::Failed
-                | Self::Refunded
+            Self::Paid | Self::Rejected | Self::Cancelled | Self::Expired | Self::Failed
         )
     }
 }
@@ -122,10 +108,8 @@ pub fn transition(from: TipState, to: TipState) -> Result<(), IllegalTransition>
             | (Verifying, AwaitingConfirmation | Held | Paying | Rejected)
             | (AwaitingConfirmation, Held | Paying | Cancelled)
             | (Held, Paying | Cancelled)
-            | (Paying, Paid | Pledged | Failed | FiatProcessing)
+            | (Paying, Paid | Pledged | Failed)
             | (Pledged, Paying | Expired)
-            | (FiatProcessing, Paid | FiatStuck)
-            | (FiatStuck, FiatProcessing | Refunded)
     );
     if ok {
         Ok(())
@@ -157,13 +141,8 @@ mod tests {
         (Paying, Paid),
         (Paying, Pledged),
         (Paying, Failed),
-        (Paying, FiatProcessing),
         (Pledged, Paying),
         (Pledged, Expired),
-        (FiatProcessing, Paid),
-        (FiatProcessing, FiatStuck),
-        (FiatStuck, FiatProcessing),
-        (FiatStuck, Refunded),
     ];
 
     #[test]

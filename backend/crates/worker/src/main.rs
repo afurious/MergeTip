@@ -5,7 +5,6 @@ use std::sync::Arc;
 use anyhow::Context;
 use clap::Parser;
 use mergetip_core::SystemClock;
-use mergetip_core::TipId;
 use mergetip_engine::{Engine, EngineSettings, Payments};
 use mergetip_github::OctocrabGitHub;
 use mergetip_payer::{LnurlClient, nwc::NwcConnector};
@@ -15,8 +14,8 @@ use mergetip_worker::{
     cli::{Cli, Command, OpsCommand},
     handlers::{
         ExpireTipsHandler, NoopHandler, NotifyPledgeHandler, PayTipHandler, PostReplyHandler,
-        ProcessBitnobEventHandler, ProcessEventHandler, ReconcilePaymentHandler,
-        ResolveHeldHandler, ResumeSenderTipsHandler, SendDigestHandler, VerifyTipHandler,
+        ProcessEventHandler, ReconcilePaymentHandler, ResolveHeldHandler, ResumeSenderTipsHandler,
+        SendDigestHandler, VerifyTipHandler,
     },
 };
 
@@ -79,16 +78,7 @@ async fn main() -> anyhow::Result<()> {
         },
     )
     .with_mailer(mailer);
-    let engine = Arc::new(match &config.bitnob {
-        Some(bitnob) => engine.with_fiat(
-            Arc::new(
-                mergetip_fiat::BitnobClient::new(bitnob.clone())
-                    .context("cannot set up the Bitnob client")?,
-            ),
-            config.lightning_network,
-        ),
-        None => engine,
-    });
+    let engine = Arc::new(engine);
 
     // The recurring expiry job; a no-op when another worker already created it.
     let mut conn = pool.acquire().await.context("cannot reach the database")?;
@@ -117,7 +107,6 @@ async fn main() -> anyhow::Result<()> {
         .register(NotifyPledgeHandler(engine.clone()))
         .register(SendDigestHandler(engine.clone()))
         .register(ExpireTipsHandler(engine.clone()))
-        .register(ProcessBitnobEventHandler(engine.clone()))
         .register(ReconcilePaymentHandler(engine))
         .run(shutdown)
         .await;
@@ -131,38 +120,6 @@ async fn run_ops(
     command: OpsCommand,
 ) -> anyhow::Result<()> {
     match command {
-        OpsCommand::FiatRetry { tip_id, operator } => {
-            let bitnob = config
-                .bitnob
-                .clone()
-                .context("FIAT_PAYOUTS_ENABLED and the Bitnob credentials are needed to re-poll")?;
-            let provider = mergetip_fiat::BitnobClient::new(bitnob)
-                .context("cannot set up the Bitnob client")?;
-            let state = mergetip_engine::ops::fiat_retry(
-                pool,
-                &provider,
-                TipId::from_uuid(tip_id),
-                &operator,
-            )
-            .await?;
-            tracing::info!(%state, "operator action done");
-        }
-        OpsCommand::FiatRefund {
-            tip_id,
-            bolt11,
-            operator,
-        } => {
-            let state = mergetip_engine::ops::fiat_refund(
-                pool,
-                TipId::from_uuid(tip_id),
-                &bolt11,
-                config.lightning_network,
-                &operator,
-                time::OffsetDateTime::now_utc(),
-            )
-            .await?;
-            tracing::info!(%state, "operator action done");
-        }
         OpsCommand::Rewrap { operator } => {
             let report = mergetip_engine::ops::rewrap(pool, &config.keyring, &operator).await?;
             anyhow::ensure!(

@@ -87,7 +87,6 @@ pub async fn delete_me(
     wallets::revoke(&mut *tx, user_id, now).await?;
     let closed = mergetip_engine::account::close_sender_tips(&mut tx, user_id).await?;
     sessions::delete_for_user(&mut *tx, user_id).await?;
-    mergetip_store::payout_methods::delete_for_user(&mut *tx, user_id).await?;
     users::anonymise(&mut *tx, user_id, now).await?;
     tx.commit().await.map_err(ApiError::internal)?;
     tracing::info!(%user_id, closed_tips = closed, "account deleted");

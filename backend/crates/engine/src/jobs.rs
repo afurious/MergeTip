@@ -81,16 +81,6 @@ impl JobPayload for ResumeSenderTips {
     const KIND: &'static str = "resume_sender_tips";
 }
 
-/// Apply one stored Bitnob webhook delivery.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ProcessBitnobEvent {
-    pub event_id: String,
-}
-
-impl JobPayload for ProcessBitnobEvent {
-    const KIND: &'static str = "process_bitnob_event";
-}
-
 /// Close every tip past its deadline and queue due reminders. Recurring: one live job
 /// (dedupe key `expire_tips`) that reschedules itself every minute.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -196,8 +186,6 @@ pub enum TipMessage {
     Cancelled,
     /// A pledge expired unclaimed; tells the sender nothing was charged.
     Expired,
-    /// A fiat tip reached the receiver in local currency.
-    PaidOut,
 }
 
 impl TipMessage {
@@ -205,10 +193,7 @@ impl TipMessage {
     /// must act on are posted as new comments, because GitHub does not reliably notify people
     /// mentioned in an edited comment.
     pub const fn is_status(self) -> bool {
-        matches!(
-            self,
-            Self::Held | Self::Paid | Self::PaidOut | Self::Cancelled
-        )
+        matches!(self, Self::Held | Self::Paid | Self::Cancelled)
     }
 
     pub const fn as_str(self) -> &'static str {
@@ -222,7 +207,6 @@ impl TipMessage {
             Self::Failed => "failed",
             Self::Cancelled => "cancelled",
             Self::Expired => "expired",
-            Self::PaidOut => "paid_out",
         }
     }
 }
