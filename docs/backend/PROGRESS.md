@@ -75,4 +75,4 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 - [x] 5.11 Container and deploy
 - [x] 5.12 CI gates
 - [x] 5.13 Runbooks and final docs
-- [ ] 5.14 Final handover
+- [x] 5.14 Final handover
