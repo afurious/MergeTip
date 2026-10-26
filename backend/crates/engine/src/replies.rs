@@ -101,8 +101,17 @@ impl Engine {
                     limits: &self.link("/settings/limits"),
                 },
             ),
-            TipMessage::Pledged => replies::pledged(&context, &self.link("/settings/receive")),
+            TipMessage::Pledged => match self.claim_link(tip).await? {
+                Some(link) => replies::pledged(&context, &link),
+                None => replies::pledge_claimed(&context),
+            },
             TipMessage::Held => replies::held(&context),
+            TipMessage::Expired => replies::pledge_expired(&context),
+            TipMessage::Cancelled => replies::cancelled(
+                tip.error_code.as_deref().unwrap_or("unknown"),
+                &context,
+                tip.receiver_id.is_some(),
+            ),
             TipMessage::Paid => {
                 replies::receipt(&context, tip.payment_hash.as_deref().unwrap_or_default())
             }

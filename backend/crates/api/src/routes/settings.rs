@@ -5,6 +5,7 @@ use std::time::Duration;
 use axum::{Json, extract::State, http::StatusCode};
 use mergetip_core::Sats;
 use mergetip_crypto::Redacted;
+use mergetip_engine::jobs::{self, ResumeSenderTips};
 use mergetip_payer::{LightningAddress, ResolveError, nwc::PayError};
 use mergetip_store::{
     users::{self, SettingsUpdate},
@@ -91,9 +92,11 @@ pub async fn connect_wallet(
             format!("wallet_connections.nwc_uri:{id}").as_bytes(),
         )
         .map_err(ApiError::internal)?;
-    let mut conn = state.pool().acquire().await.map_err(ApiError::internal)?;
+    // The wallet and the job that resumes the sender's waiting tips commit together, so a
+    // crash can't leave tips waiting on a wallet that is already connected.
+    let mut tx = state.pool().begin().await.map_err(ApiError::internal)?;
     wallets::replace(
-        &mut conn,
+        &mut tx,
         &NewConnection {
             id,
             user_id: auth.user.id,
@@ -106,6 +109,14 @@ pub async fn connect_wallet(
         state.clock().now(),
     )
     .await?;
+    jobs::enqueue(
+        &mut tx,
+        &ResumeSenderTips {
+            user_id: auth.user.id,
+        },
+    )
+    .await?;
+    tx.commit().await.map_err(ApiError::internal)?;
     tracing::info!(user_id = %auth.user.id, wallet = %info.wallet_pubkey, "wallet connected");
     me::build(&state, auth.user.id).await.map(Json)
 }
@@ -153,28 +164,36 @@ pub async fn set_lightning_address(
     auth: AuthUser,
     Json(body): Json<AddressRequest>,
 ) -> Result<Json<Me>, ApiError> {
+    let address = checked_address(&state, auth.user.id, &body.address).await?;
+    users::set_lightning_address(state.pool(), auth.user.id, Some(&address.to_string())).await?;
+    me::build(&state, auth.user.id).await.map(Json)
+}
+
+/// Parses `raw` and checks it resolves to an LNURL-pay endpoint (422 `lnurl_invalid` or
+/// `lnurl_unreachable` otherwise).
+pub(crate) async fn checked_address(
+    state: &AppState,
+    user_id: mergetip_core::UserId,
+    raw: &str,
+) -> Result<LightningAddress, ApiError> {
     let invalid = || {
         ApiError::unprocessable(
             "lnurl_invalid",
             "That doesn't look like a working Lightning address.",
         )
     };
-    let address: LightningAddress = body.address.parse().map_err(|_| invalid())?;
+    let address: LightningAddress = raw.parse().map_err(|_| invalid())?;
     match state.receivers().probe(&address).await {
-        Ok(()) => {}
-        Err(ResolveError::Unreachable(_)) => {
-            return Err(ApiError::unprocessable(
-                "lnurl_unreachable",
-                "Couldn't reach that Lightning address. Check it and try again.",
-            ));
-        }
+        Ok(()) => Ok(address),
+        Err(ResolveError::Unreachable(_)) => Err(ApiError::unprocessable(
+            "lnurl_unreachable",
+            "Couldn't reach that Lightning address. Check it and try again.",
+        )),
         Err(err) => {
-            tracing::info!(user_id = %auth.user.id, error = %err, "Lightning address rejected");
-            return Err(invalid());
+            tracing::info!(%user_id, error = %err, "Lightning address rejected");
+            Err(invalid())
         }
     }
-    users::set_lightning_address(state.pool(), auth.user.id, Some(&address.to_string())).await?;
-    me::build(&state, auth.user.id).await.map(Json)
 }
 
 #[derive(Debug, Default, Deserialize, ToSchema)]

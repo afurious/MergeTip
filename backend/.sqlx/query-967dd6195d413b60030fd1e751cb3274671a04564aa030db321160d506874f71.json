@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT cardinality(tip_ids) FROM email_messages",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "cardinality",
+        "type_info": "Int4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "967dd6195d413b60030fd1e751cb3274671a04564aa030db321160d506874f71"
+}

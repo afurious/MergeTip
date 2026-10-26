@@ -1,0 +1,6 @@
+{% extends "layout.html" %}
+{% block content %}
+<p>@{{ pledge.sender }} sent you <strong>{{ pledge.amount }}</strong>{% if let Some(note) = pledge.note %} for {{ note }}{% endif %} on <a href="{{ pledge.thread_url }}">{{ pledge.thread }}</a>.</p>
+<p>Nothing has been charged yet. Claim it by {{ pledge.expires_on }} with a Lightning address, or create a wallet on the claim page.</p>
+{% if let Some(url) = pledge.claim_url %}<p><a href="{{ url }}" style="display: inline-block; background: #1f883d; color: #ffffff; padding: 10px 16px; border-radius: 6px; text-decoration: none; font-weight: 600;">Claim your sats</a></p>{% endif %}
+{% endblock %}

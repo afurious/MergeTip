@@ -1,0 +1,5 @@
+{% extends "layout.html" %}
+{% block content %}
+<p>The <strong>{{ pledge.amount }}</strong> @{{ pledge.sender }} sent you on <a href="{{ pledge.thread_url }}">{{ pledge.thread }}</a> wasn't claimed within 30 days, so it expired.</p>
+<p>Nothing was charged. Add a Lightning address in MergeTip and future tips arrive straight away.</p>
+{% endblock %}

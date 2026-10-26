@@ -41,6 +41,32 @@ pub fn held(tip: &TipContext<'_>) -> String {
     )
 }
 
+/// A status line for a tip that ended before any money moved, keyed by its `error_code`.
+/// `receiver_verified` is false for tips that never passed verification (a sender who never
+/// connected a wallet): their receiver came from comment text and must not be mentioned.
+pub fn cancelled(code: &str, tip: &TipContext<'_>, receiver_verified: bool) -> String {
+    let receiver = if receiver_verified {
+        format!("@{}", tip.receiver)
+    } else {
+        format!("`{}`", code_span(tip.receiver))
+    };
+    let reason = match code {
+        "pr_closed" => "PR closed without merge",
+        "sender_timeout" => "no wallet was connected within 24 h",
+        "confirmation_timeout" => "it wasn't confirmed within 1 hour",
+        "cancelled_by_sender" => "the sender cancelled it",
+        "account_deleted" => "the sender closed their MergeTip account",
+        "no_contribution" | "unknown_user" | "self_tip" | "bot_receiver" | "account_too_new" => {
+            "the contribution couldn't be verified when the PR merged"
+        }
+        _ => "it can no longer be sent",
+    };
+    format!(
+        "⏳ @{}'s **{}** tip to {receiver} was cancelled: {reason}. Nothing was charged.",
+        tip.sender, tip.amount
+    )
+}
+
 /// Sent before verification, so the receiver is not mentioned.
 pub fn connect_wallet(tip: &TipContext<'_>, link: &str) -> String {
     format!(
@@ -113,12 +139,33 @@ pub fn rejected(code: &str, tip: &TipContext<'_>, limits: &Limits, settings_link
     }
 }
 
-/// Sent when the receiver has no Lightning address yet: nothing was charged, the tip waits for
-/// them. The receiver is verified by now, so mentioning them is fine (and is the point).
-pub fn pledged(tip: &TipContext<'_>, link: &str) -> String {
+/// Sent when the receiver has no Lightning address yet: nothing was charged, and the tip waits
+/// 30 days for them to claim it. The receiver is verified by now, so mentioning them is fine (and
+/// is the point). The link is public; claiming still needs the receiver's GitHub sign-in.
+pub fn pledged(tip: &TipContext<'_>, claim_link: &str) -> String {
     format!(
-        "⚡ @{}, @{} sent you **{}**{}. Nothing has been charged yet: add a Lightning address to \
-         receive it → [Receive sats]({link})",
+        "⚡ @{}, @{} sent you **{}**{}. Claim within 30 days → [Claim your sats]({claim_link})",
+        tip.receiver,
+        tip.sender,
+        tip.amount,
+        note_suffix(tip.note)
+    )
+}
+
+/// Told to the sender when a pledge expires unclaimed: nothing moved, and they may tip again.
+pub fn pledge_expired(tip: &TipContext<'_>) -> String {
+    format!(
+        "⌛ @{}, @{} didn't claim your **{}** tip within 30 days, so it expired. Nothing was \
+         charged.",
+        tip.sender, tip.receiver, tip.amount
+    )
+}
+
+/// The pledge reply when the pledge was already claimed (or closed) before the reply was posted:
+/// no link to a token that no longer works.
+pub fn pledge_claimed(tip: &TipContext<'_>) -> String {
+    format!(
+        "⚡ @{}, @{} sent you **{}**{}.",
         tip.receiver,
         tip.sender,
         tip.amount,
@@ -281,6 +328,31 @@ mod tests {
     }
 
     #[test]
+    fn cancellation_messages() {
+        let mut rendered: Vec<String> = [
+            "pr_closed",
+            "sender_timeout",
+            "confirmation_timeout",
+            "cancelled_by_sender",
+            "account_deleted",
+            "no_contribution",
+            "something_new",
+        ]
+        .iter()
+        .map(|code| format!("{code}: {}", cancelled(code, &tip(None), true)))
+        .collect();
+        let unverified = TipContext {
+            receiver: "some`one",
+            ..tip(None)
+        };
+        rendered.push(format!(
+            "unverified: {}",
+            cancelled("sender_timeout", &unverified, false)
+        ));
+        insta::assert_snapshot!(rendered.join("\n"));
+    }
+
+    #[test]
     fn rejection_messages() {
         let codes = [
             "no_contribution",
@@ -335,8 +407,10 @@ mod tests {
             .collect();
         rendered.push(pledged(
             &tip(Some("the docs")),
-            "https://mergetip.dev/settings/receive",
+            "https://mergetip.dev/claim/q2V3cGxhaW5fdG9rZW4",
         ));
+        rendered.push(pledge_claimed(&tip(Some("the docs"))));
+        rendered.push(pledge_expired(&tip(Some("the docs"))));
         insta::assert_snapshot!(rendered.join("\n"));
     }
 

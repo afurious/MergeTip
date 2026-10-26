@@ -1,0 +1,381 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT * FROM tips\n        WHERE (($2 = 'sent' AND sender_id = $1)\n               OR ($2 = 'received' AND receiver_id = $1)\n               OR ($2 = 'all' AND (sender_id = $1 OR receiver_id = $1)))\n          AND ($3::text IS NULL OR state = $3)\n          AND ($4::timestamptz IS NULL OR (created_at, id) < ($4, $5::uuid))\n        ORDER BY created_at DESC, id DESC\n        LIMIT $6\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "idempotency_key",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "idempotency_key"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "installation_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "installation_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "sender_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "sender_id"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "receiver_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "receiver_id"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "receiver_login",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "receiver_login"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "repo",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "repo"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "thread_number",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "thread_number"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "is_pr",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "is_pr"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "comment_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "comment_id"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "command_index",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "command_index"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "kind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "amount_sats",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "amount_sats"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "note",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "note"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "state",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "state"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "version",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "version"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "verified_by",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "verified_by"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "payment_hash",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "payment_hash"
+          }
+        }
+      },
+      {
+        "ordinal": 18,
+        "name": "preimage",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "preimage"
+          }
+        }
+      },
+      {
+        "ordinal": 19,
+        "name": "error_code",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "error_code"
+          }
+        }
+      },
+      {
+        "ordinal": 20,
+        "name": "error_detail",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "error_detail"
+          }
+        }
+      },
+      {
+        "ordinal": 21,
+        "name": "claim_token_hash",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "claim_token_hash"
+          }
+        }
+      },
+      {
+        "ordinal": 22,
+        "name": "confirm_expires_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "confirm_expires_at"
+          }
+        }
+      },
+      {
+        "ordinal": 23,
+        "name": "confirmed_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "confirmed_at"
+          }
+        }
+      },
+      {
+        "ordinal": 24,
+        "name": "expires_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "expires_at"
+          }
+        }
+      },
+      {
+        "ordinal": 25,
+        "name": "email_status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "email_status"
+          }
+        }
+      },
+      {
+        "ordinal": 26,
+        "name": "last_notified_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "last_notified_at"
+          }
+        }
+      },
+      {
+        "ordinal": 27,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 28,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "updated_at"
+          }
+        }
+      },
+      {
+        "ordinal": 29,
+        "name": "claim_token_ciphertext",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "claim_token_ciphertext"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "4140b882d8f1c2fe3eaed91235fd37b2d0420919e897cc95b3444b4a3661bac2"
+}

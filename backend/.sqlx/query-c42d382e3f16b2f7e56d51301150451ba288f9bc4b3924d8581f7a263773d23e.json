@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        UPDATE tips SET\n            state = $3,\n            version = version + 1,\n            receiver_id = COALESCE($4, receiver_id),\n            verified_by = COALESCE($5, verified_by),\n            error_code = COALESCE($6, error_code),\n            error_detail = COALESCE($7, error_detail),\n            expires_at = COALESCE($8, expires_at),\n            confirm_expires_at = COALESCE($9, confirm_expires_at),\n            payment_hash = COALESCE($10, payment_hash),\n            preimage = COALESCE($11, preimage)\n        WHERE id = $1 AND state = $2\n        RETURNING *\n        ",
+  "query": "\n        SELECT * FROM tips\n        WHERE repo = $1 AND thread_number = $2 AND state = $3\n        ORDER BY created_at, command_index\n        ",
   "describe": {
     "columns": [
       {
@@ -321,20 +321,23 @@
             "name": "updated_at"
           }
         }
+      },
+      {
+        "ordinal": 29,
+        "name": "claim_token_ciphertext",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "claim_token_ciphertext"
+          }
+        }
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
         "Text",
-        "Text",
-        "Uuid",
-        "Jsonb",
-        "Text",
-        "Text",
-        "Timestamptz",
-        "Timestamptz",
-        "Text",
+        "Int4",
         "Text"
       ]
     },
@@ -367,8 +370,9 @@
       true,
       true,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "7d214396ccef21c3b326d57973148a2c97dc09b6a2d867dbb3130ca6fa97f481"
+  "hash": "c42d382e3f16b2f7e56d51301150451ba288f9bc4b3924d8581f7a263773d23e"
 }

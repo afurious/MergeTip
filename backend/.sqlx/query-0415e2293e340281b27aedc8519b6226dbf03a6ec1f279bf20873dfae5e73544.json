@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_messages (provider_id, user_id, tip_ids, sent_at)\n        VALUES ($1, $2, $3, $4)\n        ON CONFLICT (provider_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "UuidArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0415e2293e340281b27aedc8519b6226dbf03a6ec1f279bf20873dfae5e73544"
+}

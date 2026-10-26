@@ -13,6 +13,7 @@ workspace = true
 [dependencies]
 mergetip-core.workspace = true
 mergetip-crypto.workspace = true
+mergetip-notify.workspace = true
 mergetip-github.workspace = true
 mergetip-parser.workspace = true
 mergetip-payer.workspace = true
@@ -31,6 +32,7 @@ uuid.workspace = true
 futures.workspace = true
 mergetip-crypto.workspace = true
 mergetip-github = { workspace = true, features = ["testing"] }
+mergetip-notify = { workspace = true, features = ["testing"] }
 mergetip-payer = { workspace = true, features = ["testing"] }
 nostr-sdk = { workspace = true, features = ["local-relay"] }
 wiremock.workspace = true

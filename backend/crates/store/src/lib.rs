@@ -4,11 +4,13 @@
 //! transaction) and `&mut PgConnection` when they need their own nested transaction.
 
 pub mod bot_comments;
+pub mod email_messages;
 mod error;
 pub mod feature_flags;
 pub mod github_events;
 pub mod installations;
 pub mod jobs;
+pub mod otp_codes;
 pub mod payment_attempts;
 pub mod sent_replies;
 pub mod sessions;

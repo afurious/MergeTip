@@ -3,6 +3,7 @@ use std::{fmt, sync::Arc};
 use mergetip_core::Clock;
 use mergetip_crypto::Keyring;
 use mergetip_github::oauth::GitHubOAuth;
+use mergetip_notify::Mailer;
 use mergetip_payer::{ReceiverEndpoint, WalletConnector};
 use mergetip_store::PgPool;
 
@@ -26,6 +27,8 @@ pub struct Services {
     pub wallets: Arc<dyn WalletConnector>,
     /// Resolves Lightning addresses (LNURL-pay).
     pub receivers: Arc<dyn ReceiverEndpoint>,
+    /// Sends confirmation codes. The worker sends everything else.
+    pub mailer: Arc<dyn Mailer>,
 }
 
 impl AppState {
@@ -53,6 +56,10 @@ impl AppState {
 
     pub fn receivers(&self) -> &dyn ReceiverEndpoint {
         self.0.services.receivers.as_ref()
+    }
+
+    pub fn mailer(&self) -> &dyn Mailer {
+        self.0.services.mailer.as_ref()
     }
 
     pub fn pool(&self) -> &PgPool {

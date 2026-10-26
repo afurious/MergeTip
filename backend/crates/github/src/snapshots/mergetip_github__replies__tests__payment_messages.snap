@@ -11,4 +11,6 @@ daily_cap_reached: 😕 @maintainer, this tip would take you over your daily lim
 over_per_tip_cap: 😕 @maintainer, **2,100 sats** is above your per-tip limit of **10,000 sats**. [Manage limits](https://mergetip.dev/settings/limits).
 receiver_unpayable: 😕 @maintainer, @reviewer's Lightning address couldn't accept this payment, so nothing was sent.
 payment_failed: 😕 @maintainer, the **2,100 sats** tip to @reviewer couldn't be paid. Nothing was charged; please try again later.
-⚡ @reviewer, @maintainer sent you **2,100 sats** for the docs. Nothing has been charged yet: add a Lightning address to receive it → [Receive sats](https://mergetip.dev/settings/receive)
+⚡ @reviewer, @maintainer sent you **2,100 sats** for the docs. Claim within 30 days → [Claim your sats](https://mergetip.dev/claim/q2V3cGxhaW5fdG9rZW4)
+⚡ @reviewer, @maintainer sent you **2,100 sats** for the docs.
+⌛ @maintainer, @reviewer didn't claim your **2,100 sats** tip within 30 days, so it expired. Nothing was charged.

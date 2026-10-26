@@ -85,6 +85,35 @@ pub trait Env {
     }
 }
 
+/// The default sender when `EMAIL_FROM` is unset.
+pub const DEFAULT_EMAIL_FROM: &str = "MergeTip <tips@mail.mergetip.dev>";
+
+/// Email delivery settings shared by the api (confirmation codes) and the worker (pledge
+/// notices): `RESEND_API_KEY`, `SMTP_URL` and `EMAIL_FROM`. Plain SMTP has no TLS, so it is
+/// refused outside dev.
+pub fn mailer_config(
+    env: &impl Env,
+    app_env: AppEnv,
+) -> Result<mergetip_notify::MailerConfig, ConfigError> {
+    let smtp_url = env.optional("SMTP_URL");
+    let resend_api_key = env
+        .optional("RESEND_API_KEY")
+        .map(mergetip_crypto::Redacted::new);
+    if smtp_url.is_some() && resend_api_key.is_none() && !app_env.is_dev() {
+        return Err(ConfigError::Invalid {
+            name: "SMTP_URL",
+            reason: "plain SMTP is for local Mailpit only; set RESEND_API_KEY outside dev".into(),
+        });
+    }
+    Ok(mergetip_notify::MailerConfig {
+        resend_api_key,
+        smtp_url,
+        from: env
+            .optional("EMAIL_FROM")
+            .unwrap_or_else(|| DEFAULT_EMAIL_FROM.into()),
+    })
+}
+
 /// The real process environment.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ProcessEnv;
@@ -114,6 +143,20 @@ mod tests {
             env.required("MASTER_KEY"),
             Err(ConfigError::Missing("MASTER_KEY"))
         );
+    }
+
+    #[test]
+    fn plain_smtp_is_for_dev_only() {
+        let env = HashMap::from([("SMTP_URL", "smtp://localhost:1025")]);
+        let config = mailer_config(&env, AppEnv::Dev).unwrap();
+        assert_eq!(config.smtp_url.as_deref(), Some("smtp://localhost:1025"));
+        assert_eq!(config.from, DEFAULT_EMAIL_FROM);
+        assert!(mailer_config(&env, AppEnv::Production).is_err());
+        let with_resend = HashMap::from([
+            ("SMTP_URL", "smtp://localhost:1025"),
+            ("RESEND_API_KEY", "re_x"),
+        ]);
+        assert!(mailer_config(&with_resend, AppEnv::Production).is_ok());
     }
 
     #[test]

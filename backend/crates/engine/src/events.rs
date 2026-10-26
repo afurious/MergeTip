@@ -43,8 +43,7 @@ impl Engine {
                     .await?;
             }
             ("pull_request", Some("closed")) => {
-                // On-merge holds are resolved here from M4 on.
-                tracing::debug!(delivery_id, "pull_request.closed received");
+                self.handle_pull_closed(parse(&event.payload)?).await?;
             }
             // Edited and deleted comments are ignored on purpose: replaying an edit must never
             // create a tip (FR-2.4). Everything else is not ours to act on.

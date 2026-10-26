@@ -106,3 +106,80 @@ fn missing_header(name: &'static str) -> ApiError {
         format!("The {name} header is required."),
     )
 }
+
+/// Resend delivery events this API records. Anything else is acknowledged and ignored.
+fn email_status(event_type: &str) -> Option<&'static str> {
+    match event_type {
+        "email.sent" => Some("sent"),
+        "email.delivered" => Some("delivered"),
+        "email.opened" => Some("opened"),
+        "email.bounced" => Some("bounced"),
+        _ => None,
+    }
+}
+
+/// Receive a Resend delivery event (Svix-signed) and update the email status of every tip the
+/// message covered (FR-11.7).
+#[utoipa::path(
+    post,
+    path = "/v1/webhooks/resend",
+    operation_id = "receive_resend_webhook",
+    tag = "webhooks",
+    params(
+        ("svix-id" = String, Header, description = "Unique message ID"),
+        ("svix-timestamp" = String, Header, description = "Unix seconds when it was sent"),
+        ("svix-signature" = String, Header, description = "Space-separated `v1,<base64>` signatures"),
+    ),
+    request_body(content = String, content_type = "application/json", description = "Raw event payload"),
+    responses(
+        (status = 200, description = "Recorded, or ignored as irrelevant"),
+        (status = 401, description = "Signature missing, wrong or too old", body = crate::error::ErrorBody),
+        (status = 404, description = "Resend webhooks aren't configured", body = crate::error::ErrorBody),
+    )
+)]
+pub async fn resend(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<StatusCode, ApiError> {
+    let Some(secret) = state.config().resend_webhook_secret.as_ref() else {
+        return Err(ApiError::not_found());
+    };
+    let (Some(id), Some(timestamp), Some(signatures)) = (
+        header(&headers, "svix-id"),
+        header(&headers, "svix-timestamp"),
+        header(&headers, "svix-signature"),
+    ) else {
+        return Err(invalid_signature());
+    };
+    mergetip_crypto::verify_svix_signature(
+        secret.expose(),
+        id,
+        timestamp,
+        &body,
+        signatures,
+        state.clock().now().unix_timestamp(),
+    )
+    .map_err(|_| invalid_signature())?;
+
+    #[derive(serde::Deserialize)]
+    struct Event {
+        #[serde(rename = "type")]
+        kind: String,
+        data: EventData,
+    }
+    #[derive(serde::Deserialize)]
+    struct EventData {
+        email_id: Option<String>,
+    }
+    let Ok(event) = serde_json::from_slice::<Event>(&body) else {
+        return Ok(StatusCode::OK);
+    };
+    let (Some(status), Some(email_id)) = (email_status(&event.kind), event.data.email_id) else {
+        return Ok(StatusCode::OK);
+    };
+    let tips = mergetip_store::email_messages::tips_for(state.pool(), &email_id).await?;
+    let changed = mergetip_store::tips::advance_email_status(state.pool(), &tips, status).await?;
+    tracing::info!(event = %event.kind, changed, "email delivery event");
+    Ok(StatusCode::OK)
+}

@@ -164,6 +164,498 @@
         ]
       }
     },
+    "/v1/claims/{token}": {
+      "get": {
+        "tags": [
+          "claims"
+        ],
+        "summary": "The pledge behind a claim link, for the claim page.",
+        "operationId": "get_claim",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "description": "The token from the claim link",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TipEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`claim_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "`claim_expired`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "claims"
+        ],
+        "summary": "Claim a pledge as its receiver: the sender's wallet pays it to the receiver's address.",
+        "operationId": "claim_tip",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "description": "The token from the claim link",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Optional; an empty body uses the saved address",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TipEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`not_receiver`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`claim_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`already_claimed`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "`claim_expired`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`no_address`, `lnurl_invalid` or `lnurl_unreachable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/v1/confirmations/{tip_id}": {
+      "get": {
+        "tags": [
+          "confirmations"
+        ],
+        "summary": "A high-value tip waiting for its sender's confirmation.",
+        "operationId": "get_confirmation",
+        "parameters": [
+          {
+            "name": "tip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TipEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`not_sender`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such tip",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "confirmations"
+        ],
+        "summary": "Confirm a high-value tip: it is paid now, or when its PR merges for an on-merge tip.",
+        "operationId": "confirm_tip",
+        "parameters": [
+          {
+            "name": "tip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Optional unless codes are on",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TipEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`not_sender`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`not_awaiting_confirmation`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "`confirmation_expired`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`otp_invalid`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "confirmations"
+        ],
+        "summary": "Cancel a high-value tip instead of confirming it. Nothing is charged.",
+        "operationId": "cancel_confirmation",
+        "parameters": [
+          {
+            "name": "tip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Cancelled"
+          },
+          "403": {
+            "description": "`not_sender`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`not_awaiting_confirmation`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/v1/confirmations/{tip_id}/otp": {
+      "post": {
+        "tags": [
+          "confirmations"
+        ],
+        "summary": "Email a 6-digit code for confirming this tip (only when the sender turned codes on).",
+        "operationId": "send_confirmation_code",
+        "parameters": [
+          {
+            "name": "tip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Code sent"
+          },
+          "403": {
+            "description": "`not_sender`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`not_awaiting_confirmation`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "`confirmation_expired`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`otp_not_enabled` or `otp_unavailable` (no email on file)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`otp_rate_limited`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`email_failed`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/v1/email/unsubscribe": {
+      "get": {
+        "tags": [
+          "email"
+        ],
+        "summary": "Unsubscribe from the link in an email; answers with a short page.",
+        "operationId": "unsubscribe_link",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "description": "The signed token from the email's link.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unsubscribed (HTML page)",
+            "content": {
+              "text/html": {}
+            }
+          },
+          "400": {
+            "description": "`invalid_token`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "email"
+        ],
+        "summary": "One-click unsubscribe (RFC 8058), sent by mail clients from the `List-Unsubscribe` header.",
+        "operationId": "unsubscribe_one_click",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "description": "The signed token from the email's link.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Unsubscribed"
+          },
+          "400": {
+            "description": "`invalid_token`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/health": {
       "get": {
         "tags": [
@@ -219,6 +711,33 @@
           },
           {
             "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Delete the account: secrets and personal data are erased and waiting tips are closed. Tip\nrecords stay, anonymised, so replayed webhooks still can't create duplicates.",
+        "operationId": "delete_me",
+        "responses": {
+          "204": {
+            "description": "Deleted and signed out"
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
           }
         ]
       }
@@ -319,6 +838,92 @@
         ]
       }
     },
+    "/v1/me/tips": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "The signed-in user's tips, newest first, 50 per page.",
+        "operationId": "list_my_tips",
+        "parameters": [
+          {
+            "name": "direction",
+            "in": "query",
+            "description": "`sent`, `received` or `all` (default).",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "description": "Only tips in this state.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "From the previous page's `next_cursor`.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TipList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalid_query`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/me/wallet": {
       "put": {
         "tags": [
@@ -375,6 +980,124 @@
         "responses": {
           "204": {
             "description": "Disconnected (or nothing was connected)"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/tips/comment": {
+      "post": {
+        "tags": [
+          "tips"
+        ],
+        "summary": "Post a `/tip` comment on GitHub as the signed-in user.",
+        "operationId": "post_tip_comment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TipCommentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Posted; the webhook takes it from here",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostedTipComment"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated` or `github_reauth_required`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`app_not_installed` or `github_forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalid_tip`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/users/{login}/receive-status": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Whether a GitHub user can receive a tip right now. Unknown users can't, yet.",
+        "operationId": "receive_status",
+        "parameters": [
+          {
+            "name": "login",
+            "in": "path",
+            "description": "GitHub login",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiveStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -460,6 +1183,80 @@
           }
         }
       }
+    },
+    "/v1/webhooks/resend": {
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Receive a Resend delivery event (Svix-signed) and update the email status of every tip the\nmessage covered (FR-11.7).",
+        "operationId": "receive_resend_webhook",
+        "parameters": [
+          {
+            "name": "svix-id",
+            "in": "header",
+            "description": "Unique message ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "svix-timestamp",
+            "in": "header",
+            "description": "Unix seconds when it was sent",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "svix-signature",
+            "in": "header",
+            "description": "Space-separated `v1,<base64>` signatures",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Raw event payload",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Recorded, or ignored as irrelevant"
+          },
+          "401": {
+            "description": "Signature missing, wrong or too old",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resend webhooks aren't configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -501,6 +1298,32 @@
             "minimum": 0
           }
         }
+      },
+      "ClaimRequest": {
+        "type": "object",
+        "properties": {
+          "lightning_address": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Where to receive the sats. Omit to use the address already saved in settings."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConfirmRequest": {
+        "type": "object",
+        "properties": {
+          "otp": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The emailed code; required when confirmation codes are on."
+          }
+        },
+        "additionalProperties": false
       },
       "ErrorBody": {
         "type": "object",
@@ -616,6 +1439,39 @@
           }
         }
       },
+      "PostedTipComment": {
+        "type": "object",
+        "required": [
+          "comment_url"
+        ],
+        "properties": {
+          "comment_url": {
+            "type": "string"
+          }
+        }
+      },
+      "ReceiveMethod": {
+        "type": "string",
+        "enum": [
+          "lightning_address",
+          "none"
+        ]
+      },
+      "ReceiveStatus": {
+        "type": "object",
+        "required": [
+          "login",
+          "method"
+        ],
+        "properties": {
+          "login": {
+            "type": "string"
+          },
+          "method": {
+            "$ref": "#/components/schemas/ReceiveMethod"
+          }
+        }
+      },
       "SettingsRequest": {
         "type": "object",
         "properties": {
@@ -657,6 +1513,206 @@
           }
         },
         "additionalProperties": false
+      },
+      "Tip": {
+        "type": "object",
+        "required": [
+          "id",
+          "state",
+          "amount_sats",
+          "kind",
+          "sender",
+          "receiver",
+          "repo",
+          "thread_number",
+          "thread_url",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "amount_sats": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the tip's current wait ends: the confirmation deadline while it awaits confirmation,\notherwise the sender or pledge deadline."
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "now",
+              "on_merge"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "payment_hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "receiver": {
+            "$ref": "#/components/schemas/UserRef"
+          },
+          "repo": {
+            "type": "string",
+            "description": "`owner/name`."
+          },
+          "sender": {
+            "$ref": "#/components/schemas/UserRef"
+          },
+          "state": {
+            "$ref": "#/components/schemas/TipState"
+          },
+          "thread_number": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "thread_url": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TipCommentRequest": {
+        "type": "object",
+        "required": [
+          "repo",
+          "thread_number",
+          "receiver",
+          "amount_sats",
+          "kind"
+        ],
+        "properties": {
+          "amount_sats": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "now",
+              "on_merge"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "receiver": {
+            "type": "string",
+            "description": "GitHub login, without `@`."
+          },
+          "repo": {
+            "type": "string",
+            "description": "`owner/name`."
+          },
+          "thread_number": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "TipEnvelope": {
+        "type": "object",
+        "description": "`{ tip }`, the body of the claim and confirmation endpoints.",
+        "required": [
+          "tip"
+        ],
+        "properties": {
+          "tip": {
+            "$ref": "#/components/schemas/Tip"
+          }
+        }
+      },
+      "TipKindBody": {
+        "type": "string",
+        "enum": [
+          "now",
+          "on_merge"
+        ]
+      },
+      "TipList": {
+        "type": "object",
+        "description": "A page of the signed-in user's tips.",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Tip"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass back as `cursor` for the next page; `null` on the last page."
+          }
+        }
+      },
+      "TipState": {
+        "type": "string",
+        "description": "A tip's state as clients see it. Internal fiat states map onto the closest public one until\nfiat payouts add their own values (M5).",
+        "enum": [
+          "received",
+          "awaiting_sender",
+          "verifying",
+          "awaiting_confirmation",
+          "held",
+          "paying",
+          "paid",
+          "pledged",
+          "rejected",
+          "cancelled",
+          "expired",
+          "failed"
+        ]
+      },
+      "UserRef": {
+        "type": "object",
+        "required": [
+          "login",
+          "avatar_url"
+        ],
+        "properties": {
+          "avatar_url": {
+            "type": "string"
+          },
+          "login": {
+            "type": "string"
+          }
+        }
       },
       "WalletRequest": {
         "type": "object",
@@ -724,6 +1780,26 @@
     {
       "name": "me",
       "description": "The signed-in user's account and settings"
+    },
+    {
+      "name": "claims",
+      "description": "Claiming pledged tips"
+    },
+    {
+      "name": "confirmations",
+      "description": "Confirming high-value tips"
+    },
+    {
+      "name": "email",
+      "description": "Email preferences reachable from emails"
+    },
+    {
+      "name": "tips",
+      "description": "Sending tips from the browser extension"
+    },
+    {
+      "name": "users",
+      "description": "Other GitHub users"
     }
   ]
 }

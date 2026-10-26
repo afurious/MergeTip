@@ -1,0 +1,5 @@
+{% extends "layout.txt" %}
+{% block content %}The {{ pledge.amount }} @{{ pledge.sender }} sent you on {{ pledge.thread }} ({{ pledge.thread_url }}) wasn't claimed within 30 days, so it expired.
+
+Nothing was charged. Add a Lightning address in MergeTip and future tips arrive straight away.
+{% endblock %}

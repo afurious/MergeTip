@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE tips SET email_status = $2 WHERE id = $1 AND last_notified_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "98e1946718e75808867f8beda8156d5ac3c7b00c2e6aae17a99136a3bc86f428"
+}

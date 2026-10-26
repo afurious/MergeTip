@@ -1,9 +1,15 @@
 //! Route table and middleware stack.
 
 pub(crate) mod auth;
+pub(crate) mod claims;
+pub(crate) mod compose;
+pub(crate) mod confirmations;
+pub(crate) mod email;
 pub(crate) mod health;
 pub(crate) mod me;
 pub(crate) mod settings;
+pub(crate) mod tips;
+pub(crate) mod users;
 pub(crate) mod webhooks;
 
 use std::time::Duration;
@@ -52,7 +58,10 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/github/callback", get(auth::callback))
         .route("/auth/logout", post(auth::logout))
         .route("/auth/extension-token", post(auth::extension_token))
-        .route("/me", get(me::get_me))
+        .route("/me", get(me::get_me).delete(me::delete_me))
+        .route("/me/tips", get(tips::list_my_tips))
+        .route("/users/{login}/receive-status", get(users::receive_status))
+        .route("/tips/comment", post(compose::post_tip_comment))
         .route(
             "/me/wallet",
             put(settings::connect_wallet).delete(settings::disconnect_wallet),
@@ -62,7 +71,26 @@ pub fn router(state: AppState) -> Router {
             put(settings::set_lightning_address),
         )
         .route("/me/settings", patch(settings::update_settings))
-        .route("/webhooks/github", post(webhooks::github));
+        .route(
+            "/claims/{token}",
+            get(claims::get_claim).post(claims::claim_tip),
+        )
+        .route(
+            "/confirmations/{tip_id}",
+            get(confirmations::get_confirmation)
+                .post(confirmations::confirm_tip)
+                .delete(confirmations::cancel_tip),
+        )
+        .route(
+            "/confirmations/{tip_id}/otp",
+            post(confirmations::send_code),
+        )
+        .route(
+            "/email/unsubscribe",
+            get(email::unsubscribe_link).post(email::unsubscribe_one_click),
+        )
+        .route("/webhooks/github", post(webhooks::github))
+        .route("/webhooks/resend", post(webhooks::resend));
 
     // Layers run outermost-last. CORS wraps every layer that can answer on its own (body limit,
     // timeout) and the error normaliser, so even those responses reach the browser readable and

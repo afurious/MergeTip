@@ -1,0 +1,7 @@
+{% extends "layout.txt" %}
+{% block content %}@{{ pledge.sender }} sent you {{ pledge.amount }}{% if let Some(note) = pledge.note %} for {{ note }}{% endif %} on {{ pledge.thread }} ({{ pledge.thread_url }}).
+
+Nothing has been charged yet. Claim it by {{ pledge.expires_on }} with a Lightning address, or create a wallet on the claim page.
+{% if let Some(url) = pledge.claim_url %}
+Claim your sats: {{ url }}
+{% endif %}{% endblock %}

@@ -135,6 +135,64 @@ pub async fn get(exec: impl PgExecutor<'_>, id: UserId) -> StoreResult<User> {
     .try_into()
 }
 
+/// Several users at once, in no particular order (for building lists of tips).
+pub async fn get_many(exec: impl PgExecutor<'_>, ids: &[UserId]) -> StoreResult<Vec<User>> {
+    let ids: Vec<Uuid> = ids.iter().map(UserId::as_uuid).collect();
+    sqlx::query_as!(
+        UserRow,
+        r#"
+        SELECT id, github_id, github_login, avatar_url, github_created_at, lightning_address,
+               per_tip_max_sats, daily_max_sats, confirm_threshold_sats, confirm_otp_enabled,
+               email_opt_out, created_at, deleted_at
+        FROM users WHERE id = ANY($1)
+        "#,
+        &ids,
+    )
+    .fetch_all(exec)
+    .await?
+    .into_iter()
+    .map(TryInto::try_into)
+    .collect()
+}
+
+/// Deletes an account's personal data and marks it deleted (`DELETE /me`). The row stays,
+/// anonymised to `deleted-{short id}`, because tip rows reference it and their idempotency keys
+/// must keep working. Its GitHub ID stays too, so the account can sign up again later.
+pub async fn anonymise(
+    exec: impl PgExecutor<'_>,
+    id: UserId,
+    now: OffsetDateTime,
+) -> StoreResult<()> {
+    let short: String = id.as_uuid().simple().to_string().chars().take(8).collect();
+    sqlx::query!(
+        r#"
+        UPDATE users SET
+            github_login = $2, login_stale = true, avatar_url = NULL, lightning_address = NULL,
+            email_ciphertext = NULL, email_source = NULL, email_opt_out = true,
+            github_token_ciphertext = NULL, github_refresh_token_ciphertext = NULL,
+            github_token_expires_at = NULL, confirm_otp_enabled = false, deleted_at = $3
+        WHERE id = $1
+        "#,
+        id.as_uuid(),
+        format!("deleted-{short}"),
+        now,
+    )
+    .execute(exec)
+    .await?;
+    Ok(())
+}
+
+/// Signing in again after deleting the account starts it afresh.
+pub async fn reactivate(exec: impl PgExecutor<'_>, id: UserId) -> StoreResult<()> {
+    sqlx::query!(
+        "UPDATE users SET deleted_at = NULL, email_opt_out = false WHERE id = $1 AND deleted_at IS NOT NULL",
+        id.as_uuid()
+    )
+    .execute(exec)
+    .await?;
+    Ok(())
+}
+
 /// Case-insensitive lookup of the account that currently holds `login`: not deleted, and not a
 /// row whose login has since been taken by another account.
 ///
@@ -304,6 +362,46 @@ pub async fn update_settings(
     .execute(exec)
     .await?;
     Ok(())
+}
+
+/// When the user was last emailed (digests wait 24 h after it).
+pub async fn last_email_sent_at(
+    exec: impl PgExecutor<'_>,
+    id: UserId,
+) -> StoreResult<Option<OffsetDateTime>> {
+    let at = sqlx::query_scalar!(
+        "SELECT last_email_sent_at FROM users WHERE id = $1",
+        id.as_uuid()
+    )
+    .fetch_one(exec)
+    .await?;
+    Ok(at)
+}
+
+pub async fn set_last_email_sent_at(
+    exec: impl PgExecutor<'_>,
+    id: UserId,
+    at: OffsetDateTime,
+) -> StoreResult<()> {
+    sqlx::query!(
+        "UPDATE users SET last_email_sent_at = $2 WHERE id = $1",
+        id.as_uuid(),
+        at,
+    )
+    .execute(exec)
+    .await?;
+    Ok(())
+}
+
+/// One-click unsubscribe. Returns whether the user exists.
+pub async fn opt_out_of_email(exec: impl PgExecutor<'_>, id: UserId) -> StoreResult<bool> {
+    let result = sqlx::query!(
+        "UPDATE users SET email_opt_out = true WHERE id = $1",
+        id.as_uuid()
+    )
+    .execute(exec)
+    .await?;
+    Ok(result.rows_affected() == 1)
 }
 
 pub async fn set_lightning_address(

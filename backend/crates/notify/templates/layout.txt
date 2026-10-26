@@ -1,0 +1,5 @@
+{% block content %}{% endblock %}
+
+--
+{% block footer %}You get this because someone tipped you on GitHub with MergeTip. MergeTip never holds your money: tips go straight from the sender's wallet to yours.
+Unsubscribe (you'll still get GitHub mentions): {{ unsubscribe_url }}{% endblock %}

@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT verified_by FROM tips ORDER BY created_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "verified_by",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "verified_by"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "6e3f43b7d78226dae4f5ab7a39b9f4b4c1fdfd6363c241d9712bd256034ba848"
+}

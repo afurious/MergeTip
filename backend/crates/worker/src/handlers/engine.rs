@@ -3,7 +3,10 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use mergetip_engine::{
     Engine, EngineError, ReconcileOutcome,
-    jobs::{JobPayload, PayTip, PostReply, ProcessEvent, ReconcilePayment, VerifyTip},
+    jobs::{
+        ExpireTips, JobPayload, NotifyPledge, PayTip, PostReply, ProcessEvent, ReconcilePayment,
+        ResolveHeld, ResumeSenderTips, SendDigest, VerifyTip,
+    },
 };
 use mergetip_store::jobs::Job;
 
@@ -66,6 +69,56 @@ engine_handler!(
     PostReply,
     |engine, payload| engine.post_reply(&payload)
 );
+
+engine_handler!(
+    /// Pays or cancels a pull request's on-merge holds once it closes.
+    ResolveHeldHandler,
+    ResolveHeld,
+    |engine, payload| engine.resolve_held(&payload)
+);
+
+engine_handler!(
+    /// Moves a sender's waiting tips on once they connect a wallet.
+    ResumeSenderTipsHandler,
+    ResumeSenderTips,
+    |engine, payload| engine.resume_sender_tips(payload.user_id)
+);
+
+engine_handler!(
+    /// Finds an email for a new pledge's receiver and queues their digest.
+    NotifyPledgeHandler,
+    NotifyPledge,
+    |engine, payload| engine.notify_pledge(payload.tip_id)
+);
+
+engine_handler!(
+    /// Emails a receiver their due pledge notices, at most once a day.
+    SendDigestHandler,
+    SendDigest,
+    |engine, payload| engine.send_digest(payload.user_id)
+);
+
+/// How often the expiry job runs. Deadlines are checked against the tips' own timestamps, so a
+/// run that comes late still closes exactly the right tips.
+pub const EXPIRY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Closes tips past their deadline and queues reminders, then reschedules itself.
+pub struct ExpireTipsHandler(pub Arc<Engine>);
+
+#[async_trait]
+impl JobHandler for ExpireTipsHandler {
+    fn kind(&self) -> &'static str {
+        ExpireTips::KIND
+    }
+
+    async fn handle(&self, ctx: &JobContext, _job: &Job) -> Result<JobOutcome, JobError> {
+        self.0
+            .expire_tips()
+            .await
+            .map_err(|err| job_error(ctx, err))?;
+        Ok(JobOutcome::Reschedule(EXPIRY_INTERVAL))
+    }
+}
 
 /// Pays a tip. On the job's last attempt the engine fails the tip rather than asking for
 /// another retry, so a tip can't be left in `paying` by a dead-lettered job.

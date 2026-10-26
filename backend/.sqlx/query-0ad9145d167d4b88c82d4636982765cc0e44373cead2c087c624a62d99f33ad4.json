@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET lightning_address = 'reviewer@wallet.example' WHERE github_id = 11",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "0ad9145d167d4b88c82d4636982765cc0e44373cead2c087c624a62d99f33ad4"
+}

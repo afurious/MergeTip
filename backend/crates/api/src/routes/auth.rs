@@ -169,6 +169,11 @@ pub async fn callback(
         },
     )
     .await?;
+    // Signing in after deleting the account starts it afresh.
+    if user.deleted_at.is_some() {
+        users::reactivate(&mut *tx, user.id).await?;
+        tracing::info!(user_id = %user.id, "deleted account signed in again");
+    }
     let seal = |value: &str, column: &str| {
         keyring
             .seal(

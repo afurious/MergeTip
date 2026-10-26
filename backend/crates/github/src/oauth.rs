@@ -11,7 +11,7 @@ use mergetip_crypto::Redacted;
 use serde::Deserialize;
 use time::OffsetDateTime;
 
-use crate::Account;
+use crate::{Account, PostedComment, RepoName};
 
 /// Tokens for acting as the user. GitHub App user tokens expire (8 h by default) and come with a
 /// refresh token, unless the App opted out of expiring tokens.
@@ -39,6 +39,9 @@ pub enum OAuthError {
     Transport(String),
     #[error("unexpected GitHub response: {0}")]
     Decode(String),
+    /// The user may not do this (no access to the repository, or the thread is locked).
+    #[error("GitHub refused the request: {0}")]
+    Forbidden(String),
 }
 
 #[async_trait]
@@ -52,6 +55,16 @@ pub trait GitHubOAuth: Send + Sync {
     async fn refresh(&self, refresh_token: &str) -> Result<UserTokens, OAuthError>;
 
     async fn identity(&self, access_token: &str) -> Result<Identity, OAuthError>;
+
+    /// Posts a comment as the user (the extension's `/tip`). GitHub records the user, not the
+    /// App, as its author, so the webhook that follows carries the real sender.
+    async fn create_comment(
+        &self,
+        access_token: &str,
+        repo: &RepoName,
+        number: u32,
+        body: &str,
+    ) -> Result<PostedComment, OAuthError>;
 }
 
 pub struct OAuthClient {
@@ -227,5 +240,44 @@ impl GitHubOAuth for OAuthClient {
             account,
             verified_email,
         })
+    }
+
+    async fn create_comment(
+        &self,
+        access_token: &str,
+        repo: &RepoName,
+        number: u32,
+        body: &str,
+    ) -> Result<PostedComment, OAuthError> {
+        let response = self
+            .http
+            .post(format!(
+                "{}/repos/{}/{}/issues/{number}/comments",
+                self.api_base,
+                repo.owner(),
+                repo.name()
+            ))
+            .header("accept", "application/vnd.github+json")
+            .bearer_auth(access_token)
+            .json(&serde_json::json!({ "body": body }))
+            .send()
+            .await
+            .map_err(transport)?;
+        match response.status() {
+            status if status.is_success() => response
+                .json()
+                .await
+                .map_err(|err| OAuthError::Decode(err.to_string())),
+            reqwest::StatusCode::UNAUTHORIZED => {
+                Err(OAuthError::Rejected("access token not accepted".into()))
+            }
+            status @ (reqwest::StatusCode::FORBIDDEN
+            | reqwest::StatusCode::NOT_FOUND
+            | reqwest::StatusCode::GONE
+            | reqwest::StatusCode::UNPROCESSABLE_ENTITY) => {
+                Err(OAuthError::Forbidden(status.to_string()))
+            }
+            status => Err(OAuthError::Transport(status.to_string())),
+        }
     }
 }

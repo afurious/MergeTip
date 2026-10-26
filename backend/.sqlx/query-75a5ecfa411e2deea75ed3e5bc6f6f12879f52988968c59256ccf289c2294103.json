@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET per_tip_max_sats = 1000000 WHERE github_id = 10",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "75a5ecfa411e2deea75ed3e5bc6f6f12879f52988968c59256ccf289c2294103"
+}

@@ -106,6 +106,9 @@ struct TipRow {
     // Selected by `*` but deliberately not exposed: claim tokens are looked up by hash only.
     #[allow(dead_code)]
     claim_token_hash: Option<String>,
+    // Likewise: read only through [`claim_token_ciphertext`], so `Tip` never carries a secret.
+    #[allow(dead_code)]
+    claim_token_ciphertext: Option<Vec<u8>>,
     confirm_expires_at: Option<OffsetDateTime>,
     confirmed_at: Option<OffsetDateTime>,
     expires_at: Option<OffsetDateTime>,
@@ -242,6 +245,12 @@ pub struct TipPatch {
     pub confirm_expires_at: Option<OffsetDateTime>,
     pub payment_hash: Option<String>,
     pub preimage: Option<String>,
+    /// SHA-256 of a new claim token, and the token itself sealed with AAD
+    /// `tips.claim_token:{id}`. Cleared only by [`clear_claim_token`].
+    pub claim_token_hash: Option<String>,
+    pub claim_token_ciphertext: Option<Vec<u8>>,
+    /// When the sender confirmed a high-value tip in the web app.
+    pub confirmed_at: Option<OffsetDateTime>,
 }
 
 impl TipPatch {
@@ -286,7 +295,10 @@ pub async fn transition(
             expires_at = COALESCE($8, expires_at),
             confirm_expires_at = COALESCE($9, confirm_expires_at),
             payment_hash = COALESCE($10, payment_hash),
-            preimage = COALESCE($11, preimage)
+            preimage = COALESCE($11, preimage),
+            claim_token_hash = COALESCE($12, claim_token_hash),
+            claim_token_ciphertext = COALESCE($13, claim_token_ciphertext),
+            confirmed_at = COALESCE($14, confirmed_at)
         WHERE id = $1 AND state = $2
         RETURNING *
         "#,
@@ -301,6 +313,9 @@ pub async fn transition(
         patch.confirm_expires_at,
         patch.payment_hash,
         patch.preimage,
+        patch.claim_token_hash,
+        patch.claim_token_ciphertext,
+        patch.confirmed_at,
     )
     .fetch_optional(&mut *tx)
     .await?;
@@ -380,6 +395,335 @@ pub async fn count_for_pair_in_thread(
     .fetch_one(exec)
     .await?;
     Ok(count)
+}
+
+/// Tips in `state` on one thread, oldest first (e.g. every `held` tip when the PR closes).
+pub async fn list_in_thread(
+    exec: impl PgExecutor<'_>,
+    repo: &str,
+    thread_number: u32,
+    state: TipState,
+) -> StoreResult<Vec<Tip>> {
+    let thread_number = i32::try_from(thread_number).map_err(corrupt)?;
+    sqlx::query_as!(
+        TipRow,
+        r#"
+        SELECT * FROM tips
+        WHERE repo = $1 AND thread_number = $2 AND state = $3
+        ORDER BY created_at, command_index
+        "#,
+        repo,
+        thread_number,
+        state.as_str(),
+    )
+    .fetch_all(exec)
+    .await?
+    .into_iter()
+    .map(TryInto::try_into)
+    .collect()
+}
+
+/// The sender's tips still waiting for them to connect a wallet, deadline not yet passed.
+pub async fn list_awaiting_sender(
+    exec: impl PgExecutor<'_>,
+    sender: UserId,
+    now: OffsetDateTime,
+) -> StoreResult<Vec<Tip>> {
+    sqlx::query_as!(
+        TipRow,
+        r#"
+        SELECT * FROM tips
+        WHERE sender_id = $1 AND state = 'awaiting_sender' AND expires_at > $2
+        ORDER BY created_at, command_index
+        "#,
+        sender.as_uuid(),
+        now,
+    )
+    .fetch_all(exec)
+    .await?
+    .into_iter()
+    .map(TryInto::try_into)
+    .collect()
+}
+
+/// Up to `limit` tips in `state` whose deadline is before `now`, locked until the caller's
+/// transaction ends. `SKIP LOCKED` lets several expiry workers split the work without waiting on
+/// or double-handling each other's rows. The deadline is `confirm_expires_at` for
+/// `awaiting_confirmation` and `expires_at` otherwise.
+pub async fn lock_expired(
+    conn: &mut PgConnection,
+    state: TipState,
+    now: OffsetDateTime,
+    limit: i64,
+) -> StoreResult<Vec<Tip>> {
+    sqlx::query_as!(
+        TipRow,
+        r#"
+        SELECT * FROM tips
+        WHERE state = $1
+          AND (CASE WHEN $1 = 'awaiting_confirmation' THEN confirm_expires_at
+                    ELSE expires_at END) < $2
+        ORDER BY id
+        LIMIT $3
+        FOR UPDATE SKIP LOCKED
+        "#,
+        state.as_str(),
+        now,
+        limit,
+    )
+    .fetch_all(conn)
+    .await?
+    .into_iter()
+    .map(TryInto::try_into)
+    .collect()
+}
+
+/// The pledge whose claim token hashes to `token_hash`, if any. Claimed and expired-and-claimed
+/// tips have no token, so a used link finds nothing.
+pub async fn get_by_claim_hash(
+    exec: impl PgExecutor<'_>,
+    token_hash: &str,
+) -> StoreResult<Option<Tip>> {
+    sqlx::query_as!(
+        TipRow,
+        "SELECT * FROM tips WHERE claim_token_hash = $1",
+        token_hash
+    )
+    .fetch_optional(exec)
+    .await?
+    .map(TryInto::try_into)
+    .transpose()
+}
+
+/// [`get_by_claim_hash`], holding the row lock until the caller's transaction ends.
+pub async fn lock_by_claim_hash(
+    conn: &mut PgConnection,
+    token_hash: &str,
+) -> StoreResult<Option<Tip>> {
+    sqlx::query_as!(
+        TipRow,
+        "SELECT * FROM tips WHERE claim_token_hash = $1 FOR UPDATE",
+        token_hash
+    )
+    .fetch_optional(conn)
+    .await?
+    .map(TryInto::try_into)
+    .transpose()
+}
+
+/// The sealed claim token, for rendering the claim link into replies and emails.
+pub async fn claim_token_ciphertext(
+    exec: impl PgExecutor<'_>,
+    id: TipId,
+) -> StoreResult<Option<Vec<u8>>> {
+    let blob = sqlx::query_scalar!(
+        "SELECT claim_token_ciphertext FROM tips WHERE id = $1",
+        id.as_uuid()
+    )
+    .fetch_one(exec)
+    .await?;
+    Ok(blob)
+}
+
+/// Makes the claim link single-use: forgets both the hash and the sealed token.
+pub async fn clear_claim_token(exec: impl PgExecutor<'_>, id: TipId) -> StoreResult<()> {
+    sqlx::query!(
+        "UPDATE tips SET claim_token_hash = NULL, claim_token_ciphertext = NULL WHERE id = $1",
+        id.as_uuid()
+    )
+    .execute(exec)
+    .await?;
+    Ok(())
+}
+
+/// The receiver's pledges an email could mention: every open one, plus expired ones whose final
+/// notice hasn't gone out. Oldest first.
+pub async fn notice_candidates(
+    exec: impl PgExecutor<'_>,
+    receiver: UserId,
+) -> StoreResult<Vec<Tip>> {
+    sqlx::query_as!(
+        TipRow,
+        r#"
+        SELECT * FROM tips
+        WHERE receiver_id = $1
+          AND (state = 'pledged'
+               OR (state = 'expired' AND expires_at IS NOT NULL
+                   AND (last_notified_at IS NULL OR last_notified_at < expires_at)))
+        ORDER BY created_at, command_index
+        "#,
+        receiver.as_uuid(),
+    )
+    .fetch_all(exec)
+    .await?
+    .into_iter()
+    .map(TryInto::try_into)
+    .collect()
+}
+
+/// Receivers with a pledge whose 7-day reminder is due (`now ≥ expires_at − reminder`) and not
+/// yet sent: no notice since the reminder point.
+pub async fn receivers_due_a_reminder(
+    exec: impl PgExecutor<'_>,
+    now: OffsetDateTime,
+    reminder: time::Duration,
+) -> StoreResult<Vec<UserId>> {
+    let ids = sqlx::query_scalar!(
+        r#"
+        SELECT DISTINCT receiver_id AS "receiver_id!" FROM tips
+        WHERE state = 'pledged' AND receiver_id IS NOT NULL AND expires_at IS NOT NULL
+          AND expires_at - $2::interval <= $1
+          AND (last_notified_at IS NULL OR last_notified_at < expires_at - $2::interval)
+        "#,
+        now,
+        reminder as _,
+    )
+    .fetch_all(exec)
+    .await?;
+    Ok(ids.into_iter().map(UserId::from_uuid).collect())
+}
+
+/// Records that these tips were covered by a notice at `at` (sent or deliberately skipped), and
+/// sets their email status.
+pub async fn mark_notified(
+    exec: impl PgExecutor<'_>,
+    ids: &[TipId],
+    at: OffsetDateTime,
+    email_status: &str,
+) -> StoreResult<()> {
+    let ids: Vec<Uuid> = ids.iter().map(TipId::as_uuid).collect();
+    sqlx::query!(
+        "UPDATE tips SET last_notified_at = $2, email_status = $3 WHERE id = ANY($1)",
+        &ids,
+        at,
+        email_status,
+    )
+    .execute(exec)
+    .await?;
+    Ok(())
+}
+
+/// Sets the email status of a tip no notice has covered yet (e.g. `pending` once an address is
+/// found). Returns `false`, changing nothing, if a digest already covered it.
+pub async fn set_email_status_before_notice(
+    exec: impl PgExecutor<'_>,
+    id: TipId,
+    email_status: &str,
+) -> StoreResult<bool> {
+    let result = sqlx::query!(
+        "UPDATE tips SET email_status = $2 WHERE id = $1 AND last_notified_at IS NULL",
+        id.as_uuid(),
+        email_status,
+    )
+    .execute(exec)
+    .await?;
+    Ok(result.rows_affected() == 1)
+}
+
+/// Applies a delivery event from the email provider. Only moves forward
+/// (`pending < sent < delivered < opened`); `bounced` and `failed` are final, so late or
+/// replayed webhooks can't undo a bounce. Returns how many tips changed.
+pub async fn advance_email_status(
+    exec: impl PgExecutor<'_>,
+    ids: &[Uuid],
+    status: &str,
+) -> StoreResult<u64> {
+    let result = sqlx::query!(
+        r#"
+        UPDATE tips SET email_status = $2
+        WHERE id = ANY($1) AND (
+            email_status IS NULL OR email_status IN ('none', 'pending')
+            OR ($2 = 'delivered' AND email_status = 'sent')
+            OR ($2 = 'opened' AND email_status IN ('sent', 'delivered'))
+            OR ($2 IN ('bounced', 'failed') AND email_status NOT IN ('bounced', 'failed'))
+        )
+        "#,
+        ids,
+        status,
+    )
+    .execute(exec)
+    .await?;
+    Ok(result.rows_affected())
+}
+
+/// Which of a user's tips to list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+    Sent,
+    Received,
+    All,
+}
+
+impl Direction {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Sent => "sent",
+            Self::Received => "received",
+            Self::All => "all",
+        }
+    }
+}
+
+/// One page of the user's tips, newest first, strictly after the `(created_at, id)` keyset
+/// cursor when given. Keyset (not offset) pagination keeps pages stable while new tips arrive:
+/// a row is never repeated or skipped because others were inserted ahead of it.
+pub async fn list_for_user(
+    exec: impl PgExecutor<'_>,
+    user: UserId,
+    direction: Direction,
+    state: Option<TipState>,
+    after: Option<(OffsetDateTime, TipId)>,
+    limit: i64,
+) -> StoreResult<Vec<Tip>> {
+    let (after_at, after_id) = match after {
+        Some((at, id)) => (Some(at), Some(id.as_uuid())),
+        None => (None, None),
+    };
+    sqlx::query_as!(
+        TipRow,
+        r#"
+        SELECT * FROM tips
+        WHERE (($2 = 'sent' AND sender_id = $1)
+               OR ($2 = 'received' AND receiver_id = $1)
+               OR ($2 = 'all' AND (sender_id = $1 OR receiver_id = $1)))
+          AND ($3::text IS NULL OR state = $3)
+          AND ($4::timestamptz IS NULL OR (created_at, id) < ($4, $5::uuid))
+        ORDER BY created_at DESC, id DESC
+        LIMIT $6
+        "#,
+        user.as_uuid(),
+        direction.as_str(),
+        state.map(TipState::as_str),
+        after_at,
+        after_id,
+        limit,
+    )
+    .fetch_all(exec)
+    .await?
+    .into_iter()
+    .map(TryInto::try_into)
+    .collect()
+}
+
+/// The sender's tips that are still waiting on something (no money in flight), locked until
+/// the caller's transaction ends. Used when an account is deleted.
+pub async fn lock_open_by_sender(conn: &mut PgConnection, sender: UserId) -> StoreResult<Vec<Tip>> {
+    sqlx::query_as!(
+        TipRow,
+        r#"
+        SELECT * FROM tips
+        WHERE sender_id = $1
+          AND state IN ('awaiting_sender', 'verifying', 'awaiting_confirmation', 'held', 'pledged')
+        ORDER BY created_at
+        FOR UPDATE
+        "#,
+        sender.as_uuid(),
+    )
+    .fetch_all(conn)
+    .await?
+    .into_iter()
+    .map(TryInto::try_into)
+    .collect()
 }
 
 /// Records the payment hash of the tip's current attempt (each attempt has a fresh invoice).

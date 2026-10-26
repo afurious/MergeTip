@@ -1,0 +1,6 @@
+{% extends "layout.txt" %}
+{% block content %}You have {{ open }} tip{% if open != 1 %}s{% endif %} waiting to be claimed. Nothing is charged until you claim.
+{% for item in items %}
+- {{ item.pledge.amount }} from @{{ item.pledge.sender }}{% if let Some(note) = item.pledge.note %} for {{ note }}{% endif %} on {{ item.pledge.thread }} ({{ item.pledge.thread_url }}): {{ item.status }}{% if let Some(url) = item.pledge.claim_url %}
+  Claim: {{ url }}{% endif %}
+{% endfor %}{% endblock %}

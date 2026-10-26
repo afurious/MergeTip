@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET email_opt_out = false",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "e408cff6c1b6abb0e79e6212cf161e824fe9d7453519fabdb2d2fcc20e9ebb79"
+}

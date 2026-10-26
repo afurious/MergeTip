@@ -51,6 +51,23 @@ pub struct IssueCommentEvent {
     pub installation: Option<EventInstallation>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct EventPullRequest {
+    pub number: u32,
+    #[serde(default)]
+    pub merged: Option<bool>,
+}
+
+/// `pull_request`. Only `closed` is acted on: it resolves on-merge holds. The payload is a hint;
+/// the PR is fetched again before anything moves.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct PullRequestEvent {
+    pub action: String,
+    pub pull_request: EventPullRequest,
+    pub repository: EventRepository,
+    pub installation: Option<EventInstallation>,
+}
+
 /// `installation`: created, deleted, suspend, unsuspend, new_permissions_accepted.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct InstallationEvent {

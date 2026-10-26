@@ -1,0 +1,7 @@
+{% extends "layout.txt" %}
+{% block content %}The {{ pledge.amount }} @{{ pledge.sender }} sent you on {{ pledge.thread }} ({{ pledge.thread_url }}) expires on {{ pledge.expires_on }}, 7 days from now.
+
+After that it's cancelled and nothing is charged.
+{% if let Some(url) = pledge.claim_url %}
+Claim your sats: {{ url }}
+{% endif %}{% endblock %}

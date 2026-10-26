@@ -1,7 +1,7 @@
 //! Typed job payloads. Each payload type knows its `jobs.kind`, so producers and handlers cannot
 //! disagree on a kind string or payload shape.
 
-use mergetip_core::{GithubInstallationId, TipId};
+use mergetip_core::{GithubInstallationId, TipId, UserId};
 use mergetip_github::Reaction;
 use mergetip_store::{
     StoreResult,
@@ -71,6 +71,64 @@ impl JobPayload for PayTip {
     const KIND: &'static str = "pay_tip";
 }
 
+/// The sender just connected a wallet: move their waiting tips on to verification.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResumeSenderTips {
+    pub user_id: UserId,
+}
+
+impl JobPayload for ResumeSenderTips {
+    const KIND: &'static str = "resume_sender_tips";
+}
+
+/// Close every tip past its deadline and queue due reminders. Recurring: one live job
+/// (dedupe key `expire_tips`) that reschedules itself every minute.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExpireTips {}
+
+impl JobPayload for ExpireTips {
+    const KIND: &'static str = "expire_tips";
+}
+
+/// Makes sure the recurring expiry job exists (a no-op when it already does). Workers call it at
+/// startup.
+pub async fn ensure_expiry_job(conn: &mut PgConnection) -> StoreResult<Enqueued> {
+    jobs::enqueue(conn, &ExpireTips {}.job().dedupe_key(ExpireTips::KIND)).await
+}
+
+/// Find an email for a new pledge's receiver and queue their digest.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NotifyPledge {
+    pub tip_id: TipId,
+}
+
+impl JobPayload for NotifyPledge {
+    const KIND: &'static str = "notify_pledge";
+}
+
+/// Email a receiver every pledge notice that is due, in one message (at most one a day).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SendDigest {
+    pub user_id: UserId,
+}
+
+impl JobPayload for SendDigest {
+    const KIND: &'static str = "send_digest";
+}
+
+/// Resolve the `held` (on-merge) tips of one pull request against its current state on GitHub:
+/// pay them if it merged, cancel them if it closed unmerged, leave them if it is still open.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResolveHeld {
+    pub installation: GithubInstallationId,
+    pub repo: String,
+    pub number: u32,
+}
+
+impl JobPayload for ResolveHeld {
+    const KIND: &'static str = "resolve_held";
+}
+
 /// Settle the fate of a payment attempt whose outcome is unknown (the wallet didn't answer).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReconcilePayment {
@@ -124,6 +182,10 @@ pub enum TipMessage {
     Pledged,
     /// A verified tip couldn't be paid (`tips.error_code` says why).
     Failed,
+    /// The tip ended before any money moved (`tips.error_code` says why).
+    Cancelled,
+    /// A pledge expired unclaimed; tells the sender nothing was charged.
+    Expired,
 }
 
 impl TipMessage {
@@ -131,7 +193,7 @@ impl TipMessage {
     /// must act on are posted as new comments, because GitHub does not reliably notify people
     /// mentioned in an edited comment.
     pub const fn is_status(self) -> bool {
-        matches!(self, Self::Held | Self::Paid)
+        matches!(self, Self::Held | Self::Paid | Self::Cancelled)
     }
 
     pub const fn as_str(self) -> &'static str {
@@ -143,6 +205,8 @@ impl TipMessage {
             Self::Paid => "paid",
             Self::Pledged => "pledged",
             Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+            Self::Expired => "expired",
         }
     }
 }

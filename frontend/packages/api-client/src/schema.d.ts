@@ -93,6 +93,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/claims/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The pledge behind a claim link, for the claim page. */
+        get: operations["get_claim"];
+        put?: never;
+        /** Claim a pledge as its receiver: the sender's wallet pays it to the receiver's address. */
+        post: operations["claim_tip"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/confirmations/{tip_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A high-value tip waiting for its sender's confirmation. */
+        get: operations["get_confirmation"];
+        put?: never;
+        /** Confirm a high-value tip: it is paid now, or when its PR merges for an on-merge tip. */
+        post: operations["confirm_tip"];
+        /** Cancel a high-value tip instead of confirming it. Nothing is charged. */
+        delete: operations["cancel_confirmation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/confirmations/{tip_id}/otp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Email a 6-digit code for confirming this tip (only when the sender turned codes on). */
+        post: operations["send_confirmation_code"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/email/unsubscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Unsubscribe from the link in an email; answers with a short page. */
+        get: operations["unsubscribe_link"];
+        put?: never;
+        /** One-click unsubscribe (RFC 8058), sent by mail clients from the `List-Unsubscribe` header. */
+        post: operations["unsubscribe_one_click"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/health": {
         parameters: {
             query?: never;
@@ -121,7 +193,11 @@ export interface paths {
         get: operations["get_me"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete the account: secrets and personal data are erased and waiting tips are closed. Tip
+         *     records stay, anonymised, so replayed webhooks still can't create duplicates.
+         */
+        delete: operations["delete_me"];
         options?: never;
         head?: never;
         patch?: never;
@@ -161,6 +237,23 @@ export interface paths {
         patch: operations["update_settings"];
         trace?: never;
     };
+    "/v1/me/tips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in user's tips, newest first, 50 per page. */
+        get: operations["list_my_tips"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/wallet": {
         parameters: {
             query?: never;
@@ -179,6 +272,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tips/comment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post a `/tip` comment on GitHub as the signed-in user. */
+        post: operations["post_tip_comment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/users/{login}/receive-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether a GitHub user can receive a tip right now. Unknown users can't, yet. */
+        get: operations["receive_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/webhooks/github": {
         parameters: {
             query?: never;
@@ -190,6 +317,26 @@ export interface paths {
         put?: never;
         /** Receive a GitHub App webhook delivery. */
         post: operations["receive_github_webhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/webhooks/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Receive a Resend delivery event (Svix-signed) and update the email status of every tip the
+         *     message covered (FR-11.7).
+         */
+        post: operations["receive_resend_webhook"];
         delete?: never;
         options?: never;
         head?: never;
@@ -214,6 +361,14 @@ export interface components {
              * @description Sats paid or in flight since midnight UTC.
              */
             spent_today_sats: number;
+        };
+        ClaimRequest: {
+            /** @description Where to receive the sats. Omit to use the address already saved in settings. */
+            lightning_address?: string | null;
+        };
+        ConfirmRequest: {
+            /** @description The emailed code; required when confirmation codes are on. */
+            otp?: string | null;
         };
         ErrorBody: {
             error: components["schemas"]["ErrorDetail"];
@@ -248,6 +403,15 @@ export interface components {
             lightning_address?: string | null;
             wallet: components["schemas"]["WalletStatus"];
         };
+        PostedTipComment: {
+            comment_url: string;
+        };
+        /** @enum {string} */
+        ReceiveMethod: "lightning_address" | "none";
+        ReceiveStatus: {
+            login: string;
+            method: components["schemas"]["ReceiveMethod"];
+        };
         SettingsRequest: {
             confirm_otp_enabled?: boolean | null;
             /** Format: int64 */
@@ -257,6 +421,68 @@ export interface components {
             email_opt_out?: boolean | null;
             /** Format: int64 */
             per_tip_max_sats?: number | null;
+        };
+        Tip: {
+            /** Format: int64 */
+            amount_sats: number;
+            /** Format: date-time */
+            created_at: string;
+            /**
+             * Format: date-time
+             * @description When the tip's current wait ends: the confirmation deadline while it awaits confirmation,
+             *     otherwise the sender or pledge deadline.
+             */
+            expires_at?: string | null;
+            id: string;
+            /** @enum {string} */
+            kind: "now" | "on_merge";
+            note?: string | null;
+            payment_hash?: string | null;
+            receiver: components["schemas"]["UserRef"];
+            /** @description `owner/name`. */
+            repo: string;
+            sender: components["schemas"]["UserRef"];
+            state: components["schemas"]["TipState"];
+            /** Format: int32 */
+            thread_number: number;
+            thread_url: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        TipCommentRequest: {
+            /** Format: int64 */
+            amount_sats: number;
+            /** @enum {string} */
+            kind: "now" | "on_merge";
+            note?: string | null;
+            /** @description GitHub login, without `@`. */
+            receiver: string;
+            /** @description `owner/name`. */
+            repo: string;
+            /** Format: int32 */
+            thread_number: number;
+        };
+        /** @description `{ tip }`, the body of the claim and confirmation endpoints. */
+        TipEnvelope: {
+            tip: components["schemas"]["Tip"];
+        };
+        /** @enum {string} */
+        TipKindBody: "now" | "on_merge";
+        /** @description A page of the signed-in user's tips. */
+        TipList: {
+            items: components["schemas"]["Tip"][];
+            /** @description Pass back as `cursor` for the next page; `null` on the last page. */
+            next_cursor?: string | null;
+        };
+        /**
+         * @description A tip's state as clients see it. Internal fiat states map onto the closest public one until
+         *     fiat payouts add their own values (M5).
+         * @enum {string}
+         */
+        TipState: "received" | "awaiting_sender" | "verifying" | "awaiting_confirmation" | "held" | "paying" | "paid" | "pledged" | "rejected" | "cancelled" | "expired" | "failed";
+        UserRef: {
+            avatar_url: string;
+            login: string;
         };
         WalletRequest: {
             /**
@@ -390,6 +616,393 @@ export interface operations {
             };
         };
     };
+    get_claim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The token from the claim link */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipEnvelope"];
+                };
+            };
+            /** @description `claim_not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `claim_expired` */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    claim_tip: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The token from the claim link */
+                token: string;
+            };
+            cookie?: never;
+        };
+        /** @description Optional; an empty body uses the saved address */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClaimRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipEnvelope"];
+                };
+            };
+            /** @description `not_receiver` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `claim_not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `already_claimed` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `claim_expired` */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `no_address`, `lnurl_invalid` or `lnurl_unreachable` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_confirmation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tip_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipEnvelope"];
+                };
+            };
+            /** @description `not_sender` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description No such tip */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    confirm_tip: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tip_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Optional unless codes are on */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipEnvelope"];
+                };
+            };
+            /** @description `not_sender` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `not_awaiting_confirmation` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `confirmation_expired` */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `otp_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    cancel_confirmation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tip_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelled */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_sender` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `not_awaiting_confirmation` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    send_confirmation_code: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tip_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Code sent */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_sender` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `not_awaiting_confirmation` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `confirmation_expired` */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `otp_not_enabled` or `otp_unavailable` (no email on file) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `otp_rate_limited` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `email_failed` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    unsubscribe_link: {
+        parameters: {
+            query: {
+                /** @description The signed token from the email's link. */
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unsubscribed (HTML page) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": unknown;
+                };
+            };
+            /** @description `invalid_token` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    unsubscribe_one_click: {
+        parameters: {
+            query: {
+                /** @description The signed token from the email's link. */
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unsubscribed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `invalid_token` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     health: {
         parameters: {
             query?: never;
@@ -426,6 +1039,33 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Me"];
                 };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted and signed out */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Not signed in */
             401: {
@@ -502,6 +1142,50 @@ export interface operations {
             };
         };
     };
+    list_my_tips: {
+        parameters: {
+            query?: {
+                /** @description `sent`, `received` or `all` (default). */
+                direction?: string | null;
+                /** @description Only tips in this state. */
+                state?: string | null;
+                /** @description From the previous page's `next_cursor`. */
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipList"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `invalid_query` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     connect_wallet: {
         parameters: {
             query?: never;
@@ -552,6 +1236,88 @@ export interface operations {
             };
         };
     };
+    post_tip_comment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TipCommentRequest"];
+            };
+        };
+        responses: {
+            /** @description Posted; the webhook takes it from here */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostedTipComment"];
+                };
+            };
+            /** @description `unauthenticated` or `github_reauth_required` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `app_not_installed` or `github_forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `invalid_tip` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    receive_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description GitHub login */
+                login: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiveStatus"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     receive_github_webhook: {
         parameters: {
             query?: never;
@@ -591,6 +1357,54 @@ export interface operations {
             };
             /** @description Signature missing or wrong */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    receive_resend_webhook: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique message ID */
+                "svix-id": string;
+                /** @description Unix seconds when it was sent */
+                "svix-timestamp": string;
+                /** @description Space-separated `v1,<base64>` signatures */
+                "svix-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Raw event payload */
+        requestBody: {
+            content: {
+                "application/json": string;
+            };
+        };
+        responses: {
+            /** @description Recorded, or ignored as irrelevant */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Signature missing, wrong or too old */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Resend webhooks aren't configured */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -1,0 +1,9 @@
+{% extends "layout.txt" %}
+{% block content %}Your code to confirm the {{ amount }} tip to @{{ receiver }}:
+
+    {{ code }}
+
+It expires in 10 minutes. If you didn't ask for it, someone may be using your MergeTip session: ignore this email and sign out of MergeTip.
+{% endblock %}
+{% block footer %}You get this because confirmation codes are on in your MergeTip settings.
+Unsubscribe from tip notices: {{ unsubscribe_url }}{% endblock %}

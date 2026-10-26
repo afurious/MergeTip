@@ -19,6 +19,10 @@ pub struct WorkerConfig {
     pub stub_payer: bool,
     /// The Lightning network invoices must be for (`bitcoin` in production).
     pub lightning_network: mergetip_payer::Network,
+    /// The API's public origin, for unsubscribe links in emails.
+    pub api_base_url: String,
+    /// How pledge notices are emailed.
+    pub mailer: mergetip_notify::MailerConfig,
 }
 
 #[derive(Debug, Clone)]
@@ -84,6 +88,11 @@ impl WorkerConfig {
             stub_payer,
             lightning_network: env
                 .parse_or("LIGHTNING_NETWORK", mergetip_payer::Network::Bitcoin)?,
+            api_base_url: env
+                .required("API_PUBLIC_URL")?
+                .trim_end_matches('/')
+                .to_owned(),
+            mailer: mergetip_runtime::config::mailer_config(env, app_env)?,
         })
     }
 
@@ -111,6 +120,7 @@ mod tests {
             ("GITHUB_APP_ID", "12345"),
             ("GITHUB_APP_PRIVATE_KEY_PATH", "./.secrets/github-app.pem"),
             ("PUBLIC_BASE_URL", "http://localhost:5173/"),
+            ("API_PUBLIC_URL", "http://localhost:8080"),
         ])
     }
 

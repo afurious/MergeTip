@@ -48,7 +48,17 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 
 ## M4: Edge flows and notifications
 
-Not started.
+- [x] Pledges, confirmations and notifications RFC
+- [x] 4.1 On-merge holds
+- [x] 4.2 Awaiting sender
+- [x] 4.3 Pledges and claims
+- [x] 4.4 High-value confirmation
+- [x] 4.5 `notify` crate
+- [x] 4.6 Pledge notifications
+- [x] 4.7 Expiry worker
+- [x] 4.8 Remaining endpoints
+- [x] 4.9 E2E journeys
+- [x] Handover
 
 ## M5: Fiat payouts and hardening
 
