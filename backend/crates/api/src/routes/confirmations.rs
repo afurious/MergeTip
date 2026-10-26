@@ -14,7 +14,7 @@ use mergetip_core::{TipId, TipState};
 use mergetip_engine::confirm::{
     self, OTP_MAX_ATTEMPTS, OTP_RESEND_INTERVAL, OTP_TTL, new_otp, otp_mac, otp_matches,
 };
-use mergetip_notify::{Email, MailError};
+use mergetip_notify::MailError;
 use mergetip_store::{
     otp_codes,
     tips::{self, Tip as StoredTip},
@@ -160,23 +160,23 @@ pub async fn send_code(
         now + OTP_TTL,
     )
     .await?;
-    let message = Email {
-        to: email,
-        subject: "Your MergeTip confirmation code".into(),
-        html: format!(
-            "<p>Your code to confirm the {} tip to @{}: <strong>{code}</strong></p>\
-             <p>It expires in 10 minutes. If you didn't ask for it, ignore this email.</p>",
-            tip.amount, tip.receiver_login
+    let unsubscribe = mergetip_notify::unsubscribe::url(
+        &state.config().api_public_url,
+        state.keyring(),
+        auth.user.id.as_uuid(),
+    );
+    let message = mergetip_notify::email(
+        email,
+        mergetip_notify::templates::otp(
+            &code,
+            &tip.amount.to_string(),
+            &tip.receiver_login,
+            &unsubscribe,
         ),
-        text: format!(
-            "Your code to confirm the {} tip to @{}: {code}\n\nIt expires in 10 minutes. If you \
-             didn't ask for it, ignore this email.\n",
-            tip.amount, tip.receiver_login
-        ),
-        headers: Vec::new(),
-        tag: "otp".into(),
-        idempotency_key: None,
-    };
+        &unsubscribe,
+        "otp",
+        None,
+    );
     if let Err(err) = state.mailer().send(&message).await {
         // No code was delivered, so don't let the rate limit block asking again.
         otp_codes::delete(state.pool(), tip.id).await?;

@@ -1,0 +1,7 @@
+{% extends "layout.html" %}
+{% block content %}
+<p>Your code to confirm the <strong>{{ amount }}</strong> tip to @{{ receiver }}:</p>
+<p style="font-size: 28px; font-weight: 700; letter-spacing: 6px; font-family: ui-monospace, Menlo, monospace;">{{ code }}</p>
+<p>It expires in 10 minutes. If you didn't ask for it, someone may be using your MergeTip session: ignore this email and sign out of MergeTip.</p>
+{% endblock %}
+{% block footer %}You get this because confirmation codes are on in your MergeTip settings. <a href="{{ unsubscribe_url }}" style="color: #59636e;">Unsubscribe</a> from tip notices.{% endblock %}

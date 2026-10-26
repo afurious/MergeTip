@@ -1,0 +1,7 @@
+{% extends "layout.html" %}
+{% block content %}
+<p>You have {{ open }} tip{% if open != 1 %}s{% endif %} waiting to be claimed. Nothing is charged until you claim.</p>
+<ul style="padding-left: 20px;">
+{% for item in items %}<li style="margin-bottom: 12px;"><strong>{{ item.pledge.amount }}</strong> from @{{ item.pledge.sender }}{% if let Some(note) = item.pledge.note %} for {{ note }}{% endif %} on <a href="{{ item.pledge.thread_url }}">{{ item.pledge.thread }}</a>: {{ item.status }}{% if let Some(url) = item.pledge.claim_url %} · <a href="{{ url }}">Claim</a>{% endif %}</li>
+{% endfor %}</ul>
+{% endblock %}

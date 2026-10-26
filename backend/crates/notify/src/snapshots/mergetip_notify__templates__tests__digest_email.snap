@@ -1,0 +1,39 @@
+---
+source: crates/notify/src/templates.rs
+expression: "both(&digest(&items, UNSUBSCRIBE))"
+---
+Subject: You have 2 tips waiting on MergeTip
+
+=== text ===
+You have 2 tips waiting to be claimed. Nothing is charged until you claim.
+
+- 5,000 sats from @maintainer for the review on acme/widgets#42 (https://github.com/acme/widgets/pull/42): new, claim by 2026-11-25
+  Claim: https://mergetip.dev/claim/q2V3
+
+- 21 sats from @octo on acme/gadgets#7 (https://github.com/acme/gadgets/issues/7): expires on 2026-11-02
+  Claim: https://mergetip.dev/claim/q2V3
+
+- 5,000 sats from @maintainer on acme/widgets#42 (https://github.com/acme/widgets/pull/42): expired unclaimed; nothing was charged
+
+
+--
+You get this because someone tipped you on GitHub with MergeTip. MergeTip never holds your money: tips go straight from the sender's wallet to yours.
+Unsubscribe (you'll still get GitHub mentions): https://api.mergetip.dev/v1/email/unsubscribe?token=u.abc
+=== html ===
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>You have 2 tips waiting on MergeTip</title></head>
+<body style="font-family: -apple-system, Segoe UI, Helvetica, Arial, sans-serif; color: #1f2328; line-height: 1.5; max-width: 560px; margin: 0 auto; padding: 24px;">
+<p style="font-size: 20px; font-weight: 600; margin: 0 0 16px;">⚡ MergeTip</p>
+
+<p>You have 2 tips waiting to be claimed. Nothing is charged until you claim.</p>
+<ul style="padding-left: 20px;">
+<li style="margin-bottom: 12px;"><strong>5,000 sats</strong> from @maintainer for the review on <a href="https://github.com/acme/widgets/pull/42">acme/widgets#42</a>: new, claim by 2026-11-25 · <a href="https://mergetip.dev/claim/q2V3">Claim</a></li>
+<li style="margin-bottom: 12px;"><strong>21 sats</strong> from @octo on <a href="https://github.com/acme/gadgets/issues/7">acme/gadgets#7</a>: expires on 2026-11-02 · <a href="https://mergetip.dev/claim/q2V3">Claim</a></li>
+<li style="margin-bottom: 12px;"><strong>5,000 sats</strong> from @maintainer on <a href="https://github.com/acme/widgets/pull/42">acme/widgets#42</a>: expired unclaimed; nothing was charged</li>
+</ul>
+
+<hr style="border: none; border-top: 1px solid #d0d7de; margin: 32px 0 16px;">
+<p style="font-size: 12px; color: #59636e;">You get this because someone tipped you on GitHub with MergeTip. MergeTip never holds your money: tips go straight from the sender's wallet to yours. <a href="https://api.mergetip.dev/v1/email/unsubscribe?token=u.abc" style="color: #59636e;">Unsubscribe</a> from these emails; you'll still get GitHub mentions.</p>
+</body>
+</html>

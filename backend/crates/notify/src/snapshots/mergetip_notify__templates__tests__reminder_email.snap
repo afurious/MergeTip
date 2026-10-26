@@ -1,0 +1,32 @@
+---
+source: crates/notify/src/templates.rs
+expression: "both(&reminder(&line(None), UNSUBSCRIBE))"
+---
+Subject: Your 5,000 sats from @maintainer expires in 7 days
+
+=== text ===
+The 5,000 sats @maintainer sent you on acme/widgets#42 (https://github.com/acme/widgets/pull/42) expires on 2026-11-25, 7 days from now.
+
+After that it's cancelled and nothing is charged.
+
+Claim your sats: https://mergetip.dev/claim/q2V3
+
+
+--
+You get this because someone tipped you on GitHub with MergeTip. MergeTip never holds your money: tips go straight from the sender's wallet to yours.
+Unsubscribe (you'll still get GitHub mentions): https://api.mergetip.dev/v1/email/unsubscribe?token=u.abc
+=== html ===
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Your 5,000 sats from @maintainer expires in 7 days</title></head>
+<body style="font-family: -apple-system, Segoe UI, Helvetica, Arial, sans-serif; color: #1f2328; line-height: 1.5; max-width: 560px; margin: 0 auto; padding: 24px;">
+<p style="font-size: 20px; font-weight: 600; margin: 0 0 16px;">⚡ MergeTip</p>
+
+<p>The <strong>5,000 sats</strong> @maintainer sent you on <a href="https://github.com/acme/widgets/pull/42">acme/widgets#42</a> expires on 2026-11-25, 7 days from now.</p>
+<p>After that it's cancelled and nothing is charged.</p>
+<p><a href="https://mergetip.dev/claim/q2V3" style="display: inline-block; background: #1f883d; color: #ffffff; padding: 10px 16px; border-radius: 6px; text-decoration: none; font-weight: 600;">Claim your sats</a></p>
+
+<hr style="border: none; border-top: 1px solid #d0d7de; margin: 32px 0 16px;">
+<p style="font-size: 12px; color: #59636e;">You get this because someone tipped you on GitHub with MergeTip. MergeTip never holds your money: tips go straight from the sender's wallet to yours. <a href="https://api.mergetip.dev/v1/email/unsubscribe?token=u.abc" style="color: #59636e;">Unsubscribe</a> from these emails; you'll still get GitHub mentions.</p>
+</body>
+</html>

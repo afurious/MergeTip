@@ -62,7 +62,8 @@ async fn serve() -> anyhow::Result<()> {
         oauth: Arc::new(oauth),
         wallets: Arc::new(NwcConnector),
         receivers: Arc::new(receivers),
-        mailer: Arc::new(mergetip_notify::DisabledMailer),
+        mailer: mergetip_notify::from_config(&config.mailer)
+            .context("cannot set up email delivery")?,
     };
     let state = AppState::new(pool, config.clone(), clock, services);
 

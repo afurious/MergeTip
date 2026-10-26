@@ -15,5 +15,21 @@ workspace = true
 testing = []
 
 [dependencies]
+mergetip-core.workspace = true
+mergetip-crypto.workspace = true
+askama.workspace = true
 async-trait.workspace = true
+base64.workspace = true
+hex.workspace = true
+lettre.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+tokio.workspace = true
+wiremock.workspace = true
