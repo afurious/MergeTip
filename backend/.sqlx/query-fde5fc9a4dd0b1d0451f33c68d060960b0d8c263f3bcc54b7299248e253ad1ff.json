@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE payout_methods SET is_default = true WHERE user_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fde5fc9a4dd0b1d0451f33c68d060960b0d8c263f3bcc54b7299248e253ad1ff"
+}

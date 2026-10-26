@@ -100,7 +100,7 @@ impl OctocrabGitHub {
         route: &str,
     ) -> Result<T, GitHubError> {
         let client = self.client(installation)?;
-        client.get(route, None::<&()>).await.map_err(map_error)
+        get_json(&client, installation, route).await
     }
 
     /// Fetches up to [`MAX_PAGES`] pages of a list endpoint.
@@ -113,7 +113,7 @@ impl OctocrabGitHub {
         let mut items = Vec::new();
         for page in 1..=MAX_PAGES {
             let url = format!("{route}?per_page={PER_PAGE}&page={page}");
-            let batch: Vec<T> = client.get(url, None::<&()>).await.map_err(map_error)?;
+            let batch: Vec<T> = get_json(&client, installation, &url).await?;
             let full = batch.len() == PER_PAGE;
             items.extend(batch);
             if !full {
@@ -150,6 +150,36 @@ fn builder(
             .map_err(|err| GitHubError::InvalidInput(format!("invalid GitHub API URL: {err}")))?;
     }
     Ok(builder)
+}
+
+/// A GET that also records the installation's remaining rate limit from the response headers
+/// (`github_ratelimit_remaining`, alerted on below 10% of `github_ratelimit_limit`).
+async fn get_json<T: DeserializeOwned>(
+    client: &Octocrab,
+    installation: GithubInstallationId,
+    route: &str,
+) -> Result<T, GitHubError> {
+    let response = client._get(route).await.map_err(map_error)?;
+    let header = |name: &str| {
+        response
+            .headers()
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<f64>().ok())
+    };
+    let installation_label = installation.to_string();
+    if let Some(remaining) = header("x-ratelimit-remaining") {
+        metrics::gauge!("github_ratelimit_remaining", "installation" => installation_label.clone())
+            .set(remaining);
+    }
+    if let Some(limit) = header("x-ratelimit-limit") {
+        metrics::gauge!("github_ratelimit_limit", "installation" => installation_label).set(limit);
+    }
+    let response = octocrab::map_github_error(response)
+        .await
+        .map_err(map_error)?;
+    let body = client.body_to_string(response).await.map_err(transport)?;
+    serde_json::from_str(&body).map_err(|err| GitHubError::Decode(err.to_string()))
 }
 
 fn transport(err: octocrab::Error) -> GitHubError {

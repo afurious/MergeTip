@@ -32,6 +32,14 @@ pub struct ApiConfig {
     pub mailer: mergetip_notify::MailerConfig,
     /// Svix secret (`whsec_…`) Resend signs delivery events with; unset disables that webhook.
     pub resend_webhook_secret: Option<Redacted<String>>,
+    /// Bitnob credentials when `FIAT_PAYOUTS_ENABLED=true` (RFC 0004).
+    pub bitnob: Option<mergetip_fiat::BitnobConfig>,
+    /// Secret Bitnob signs payout webhooks with.
+    pub bitnob_webhook_secret: Option<Redacted<String>>,
+    /// Prometheus `/metrics` on this internal address (`METRICS_ADDR`); unset disables it.
+    pub metrics_addr: Option<SocketAddr>,
+    /// Errors go to Sentry when set.
+    pub sentry_dsn: Option<Redacted<String>>,
 }
 
 impl ApiConfig {
@@ -52,6 +60,18 @@ impl ApiConfig {
             app_env,
             mailer: mergetip_runtime::config::mailer_config(env, app_env)?,
             resend_webhook_secret: env.optional("RESEND_WEBHOOK_SECRET").map(Redacted::new),
+            bitnob: mergetip_runtime::config::bitnob_config(env)?,
+            bitnob_webhook_secret: env.optional("BITNOB_WEBHOOK_SECRET").map(Redacted::new),
+            metrics_addr: env
+                .optional("METRICS_ADDR")
+                .map(|raw| {
+                    raw.trim().parse().map_err(|_| ConfigError::Invalid {
+                        name: "METRICS_ADDR",
+                        reason: format!("{raw:?} is not host:port"),
+                    })
+                })
+                .transpose()?,
+            sentry_dsn: env.optional("SENTRY_DSN").map(Redacted::new),
             addr: env.parse_or("API_ADDR", SocketAddr::from(([0, 0, 0, 0], 8080)))?,
             web_origin: parse_origin("PUBLIC_BASE_URL", &env.required("PUBLIC_BASE_URL")?)?,
             database_url: Redacted::new(env.required("DATABASE_URL")?),

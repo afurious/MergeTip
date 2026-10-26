@@ -62,4 +62,17 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 
 ## M5: Fiat payouts and hardening
 
-Not started.
+- [x] 5.1 Fiat payouts RFC and schema
+- [x] 5.2 `fiat` crate (Bitnob client)
+- [x] 5.3 Receiver payout API
+- [x] 5.4 Fiat pay path
+- [x] 5.5 Bitnob webhooks
+- [x] 5.6 Stuck-payout operations
+- [x] 5.7 Metrics and alerts
+- [x] 5.8 Abuse and HTTP hardening
+- [x] 5.9 Critical-test audit
+- [x] 5.10 Coverage gate
+- [x] 5.11 Container and deploy
+- [x] 5.12 CI gates
+- [x] 5.13 Runbooks and final docs
+- [x] 5.14 Final handover

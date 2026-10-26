@@ -31,6 +31,19 @@ pub fn receipt(tip: &TipContext<'_>, payment_hash: &str) -> String {
     )
 }
 
+/// The receipt for a tip paid out in local currency. Deliberately shows neither the fiat amount
+/// nor where it went: the thread is public, the receiver's bank details are not.
+pub fn paid_out(tip: &TipContext<'_>, payment_hash: &str) -> String {
+    let short_hash: String = payment_hash.chars().take(8).collect();
+    format!(
+        "⚡ @{} tipped @{} **{}**{} · paid out in local currency · payment `{short_hash}…`",
+        tip.sender,
+        tip.receiver,
+        tip.amount,
+        note_suffix(tip.note)
+    )
+}
+
 pub fn held(tip: &TipContext<'_>) -> String {
     format!(
         "⏳ @{} will tip @{} **{}**{} when this PR is merged",
@@ -313,6 +326,7 @@ mod tests {
         let rendered = [
             receipt(&tip(Some("the review")), hash),
             receipt(&tip(None), hash),
+            paid_out(&tip(Some("the review")), hash),
             held(&tip(None)),
             connect_wallet(&tip(None), "https://mergetip.dev/settings/wallet"),
             needs_confirmation(

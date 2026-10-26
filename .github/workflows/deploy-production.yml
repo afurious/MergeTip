@@ -1,0 +1,63 @@
+name: Deploy production
+
+# A version tag deploys to production after a manual approval: the `production` GitHub
+# Environment must list required reviewers (Settings → Environments). The tagged commit must
+# already have passed CI on main.
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  ci-passed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: The tagged commit passed CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$GITHUB_SHA" \
+            --status success --json databaseId --jq length)
+          if [ "$runs" -eq 0 ]; then
+            echo "No successful CI run for $GITHUB_SHA; tag a commit that passed CI on main." >&2
+            exit 1
+          fi
+
+  deploy:
+    needs: ci-passed
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    defaults:
+      run:
+        # The Docker build context is the backend workspace.
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@1.5
+      - name: Deploy api (runs migrations first)
+        run: >-
+          flyctl deploy . --config ../deploy/fly/api.production.toml --dockerfile Dockerfile
+          --remote-only --build-arg VERSION="${GITHUB_REF_NAME}" --build-arg GIT_SHA="${GITHUB_SHA}"
+      - name: Deploy worker
+        run: >-
+          flyctl deploy . --config ../deploy/fly/worker.production.toml --dockerfile Dockerfile
+          --remote-only --build-arg VERSION="${GITHUB_REF_NAME}" --build-arg GIT_SHA="${GITHUB_SHA}"
+      - name: Smoke test
+        run: |
+          for _ in 1 2 3 4 5 6; do
+            if curl -fsS https://api.mergetip.dev/v1/health | grep -q '"status":"ok"'; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "production /v1/health did not answer ok" >&2
+          exit 1

@@ -11,6 +11,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+metrics.workspace = true
 mergetip-core.workspace = true
 mergetip-parser.workspace = true
 mergetip-github.workspace = true
@@ -23,15 +24,18 @@ mergetip-engine.workspace = true
 mergetip-runtime.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
+clap.workspace = true
 dotenvy.workspace = true
 getrandom.workspace = true
 hex.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
+uuid.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+time.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

@@ -1,0 +1,30 @@
+# Fly.io config for mergetip-worker (production). Deploy only through the tagged release workflow.
+app = "mergetip-worker-production"
+primary_region = "jnb"
+
+[build]
+  dockerfile = "../../backend/Dockerfile"
+  [build.args]
+    BIN = "mergetip-worker"
+
+[env]
+  APP_ENV = "production"
+  LIGHTNING_NETWORK = "bitcoin"
+  # Prometheus on an internal port; Fly scrapes it, nothing routes it publicly.
+  METRICS_ADDR = "0.0.0.0:9091"
+
+[metrics]
+  port = 9091
+  path = "/metrics"
+
+[deploy]
+  strategy = "rolling"
+
+# The worker serves no HTTP traffic; Fly restarts it if the process exits. Two machines
+# (jnb, fra): jobs are claimed with SKIP LOCKED, so workers never double-process.
+[[restart]]
+  policy = "always"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

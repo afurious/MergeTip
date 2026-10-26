@@ -7,6 +7,9 @@ use crate::error::StoreResult;
 /// Global kill switch for paying tips. Off: payments wait (they are retried later).
 pub const PAYMENTS_ENABLED: &str = "payments_enabled";
 
+/// Runtime switch for fiat payouts (RFC 0004); `FIAT_PAYOUTS_ENABLED` must be on as well.
+pub const FIAT_PAYOUTS: &str = "fiat_payouts";
+
 /// Commit-author emails may be used to notify pledge receivers (RFC 0003 privacy note). With no
 /// row, it is on outside production and off in production.
 pub const EMAIL_FROM_COMMITS: &str = "email_from_commits";

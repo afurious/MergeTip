@@ -23,6 +23,9 @@ enum Command {
     Serve,
     /// Print the OpenAPI document to stdout.
     Openapi,
+    /// Apply pending database migrations and exit (Fly `release_command`). Migrations are
+    /// additive, so the running version keeps working while the new one rolls out.
+    Migrate,
 }
 
 #[tokio::main]
@@ -33,13 +36,39 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
         Command::Serve => serve().await,
+        Command::Migrate => migrate().await,
     }
+}
+
+async fn migrate() -> anyhow::Result<()> {
+    dotenvy::dotenv().ok();
+    let app_env = std::env::var("APP_ENV")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(mergetip_runtime::AppEnv::Dev);
+    let sentry_dsn = std::env::var("SENTRY_DSN")
+        .ok()
+        .filter(|v| !v.trim().is_empty());
+    let _logs = telemetry::init(app_env, sentry_dsn.as_deref());
+    let url = std::env::var("DATABASE_URL").context("DATABASE_URL is required")?;
+    let pool = db::connect(&url, 1)
+        .await
+        .context("cannot connect to the database")?;
+    db::migrate(&pool).await.context("migrations failed")?;
+    tracing::info!("migrations applied");
+    Ok(())
 }
 
 async fn serve() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     let config = Arc::new(ApiConfig::from_env(&ProcessEnv).context("invalid configuration")?);
-    telemetry::init(config.app_env);
+    let _sentry = telemetry::init(
+        config.app_env,
+        config.sentry_dsn.as_ref().map(|dsn| dsn.expose().as_str()),
+    );
+    if let Some(addr) = config.metrics_addr {
+        mergetip_runtime::metrics::install(addr).context("cannot start the metrics exporter")?;
+    }
 
     let pool = db::connect(config.database_url.expose(), 10)
         .await
@@ -64,6 +93,13 @@ async fn serve() -> anyhow::Result<()> {
         receivers: Arc::new(receivers),
         mailer: mergetip_notify::from_config(&config.mailer)
             .context("cannot set up email delivery")?,
+        fiat: match &config.bitnob {
+            Some(bitnob) => Some(Arc::new(
+                mergetip_fiat::BitnobClient::new(bitnob.clone())
+                    .context("cannot set up the Bitnob client")?,
+            )),
+            None => None,
+        },
     };
     let state = AppState::new(pool, config.clone(), clock, services);
 
@@ -73,9 +109,12 @@ async fn serve() -> anyhow::Result<()> {
     tracing::info!(addr = %config.addr, env = %config.app_env, "mergetip-api listening");
 
     let shutdown = shutdown::on_signal();
-    axum::serve(listener, router(state))
-        .with_graceful_shutdown(shutdown.cancelled_owned())
-        .await
-        .context("server error")?;
+    axum::serve(
+        listener,
+        router(state).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown.cancelled_owned())
+    .await
+    .context("server error")?;
     Ok(())
 }

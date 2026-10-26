@@ -1,0 +1,136 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, user_id, country, currency, destination_type, beneficiary_ciphertext,\n               provider_customer_id, verified_at, is_default, created_at\n        FROM payout_methods WHERE user_id = $1 AND kind = 'bitnob_fiat'\n        ORDER BY created_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "payout_methods",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "payout_methods",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "country",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "payout_methods",
+            "name": "country"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "currency",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "payout_methods",
+            "name": "currency"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "destination_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "payout_methods",
+            "name": "destination_type"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "beneficiary_ciphertext",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "payout_methods",
+            "name": "beneficiary_ciphertext"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "provider_customer_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "payout_methods",
+            "name": "provider_customer_id"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "verified_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "payout_methods",
+            "name": "verified_at"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "is_default",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "payout_methods",
+            "name": "is_default"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "payout_methods",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "a2fddce30e8c5501426942b635c5aae37964e4770e2e3cf9ff7922dc2aae9165"
+}

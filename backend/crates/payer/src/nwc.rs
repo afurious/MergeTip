@@ -360,3 +360,45 @@ impl WalletConnector for NwcConnector {
 #[cfg(test)]
 #[path = "nwc_tests.rs"]
 mod relay_tests;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every NIP-47 code maps to ours, keeps its wire name, and is classified the way RFC 0002
+    /// says: terminal codes need the sender to act; the rest may succeed on a retry.
+    #[test]
+    fn every_wallet_error_code_maps_and_classifies() {
+        let table = [
+            (ErrorCode::RateLimited, "RATE_LIMITED", false),
+            (ErrorCode::NotImplemented, "NOT_IMPLEMENTED", true),
+            (ErrorCode::InsufficientBalance, "INSUFFICIENT_BALANCE", true),
+            (ErrorCode::PaymentFailed, "PAYMENT_FAILED", false),
+            (ErrorCode::NotFound, "NOT_FOUND", false),
+            (ErrorCode::QuotaExceeded, "QUOTA_EXCEEDED", true),
+            (ErrorCode::Restricted, "RESTRICTED", true),
+            (ErrorCode::Unauthorized, "UNAUTHORIZED", true),
+            (ErrorCode::Internal, "INTERNAL", false),
+            (ErrorCode::Other, "OTHER", false),
+        ];
+        for (nip47, name, terminal) in table {
+            let err = wallet_error(NIP47Error {
+                code: nip47,
+                message: "x".repeat(500),
+            });
+            let PayError::Wallet { code, message } = err else {
+                panic!("{name}: not a wallet error");
+            };
+            assert_eq!(code.as_str(), name);
+            assert_eq!(code.to_string(), name);
+            assert_eq!(code.is_terminal(), terminal, "{name}");
+            assert_eq!(message.len(), 200, "wallet messages are bounded");
+        }
+    }
+
+    #[test]
+    fn encryption_names_match_the_database() {
+        assert_eq!(Encryption::Nip44.as_str(), "nip44");
+        assert_eq!(Encryption::Nip04.as_str(), "nip04");
+    }
+}

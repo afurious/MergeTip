@@ -3,29 +3,45 @@
 use std::sync::Arc;
 
 use anyhow::Context;
+use clap::Parser;
 use mergetip_core::SystemClock;
+use mergetip_core::TipId;
 use mergetip_engine::{Engine, EngineSettings, Payments};
 use mergetip_github::OctocrabGitHub;
 use mergetip_payer::{LnurlClient, nwc::NwcConnector};
 use mergetip_runtime::{config::ProcessEnv, db, shutdown, telemetry};
 use mergetip_worker::{
     Runner, WorkerConfig,
+    cli::{Cli, Command, OpsCommand},
     handlers::{
         ExpireTipsHandler, NoopHandler, NotifyPledgeHandler, PayTipHandler, PostReplyHandler,
-        ProcessEventHandler, ReconcilePaymentHandler, ResolveHeldHandler, ResumeSenderTipsHandler,
-        SendDigestHandler, VerifyTipHandler,
+        ProcessBitnobEventHandler, ProcessEventHandler, ReconcilePaymentHandler,
+        ResolveHeldHandler, ResumeSenderTipsHandler, SendDigestHandler, VerifyTipHandler,
     },
 };
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
+    let cli = Cli::parse();
     let config = WorkerConfig::from_env(&ProcessEnv).context("invalid configuration")?;
-    telemetry::init(config.app_env);
-
+    let _sentry = telemetry::init(
+        config.app_env,
+        config.sentry_dsn.as_ref().map(|dsn| dsn.expose().as_str()),
+    );
     let pool = db::connect(config.database_url.expose(), config.pool_size())
         .await
         .context("cannot connect to the database")?;
+
+    // Operator commands run next to a live worker (`fly ssh console`): they must not bind its
+    // metrics port or run migrations (the api's release command owns those).
+    if let Some(Command::Ops(command)) = cli.command {
+        return run_ops(&pool, &config, command).await;
+    }
+
+    if let Some(addr) = config.metrics_addr {
+        mergetip_runtime::metrics::install(addr).context("cannot start the metrics exporter")?;
+    }
     db::migrate(&pool).await.context("migrations failed")?;
 
     let key_path = &config.github.private_key_path;
@@ -51,20 +67,28 @@ async fn main() -> anyhow::Result<()> {
     settings.production = config.app_env == mergetip_runtime::AppEnv::Production;
     let mailer =
         mergetip_notify::from_config(&config.mailer).context("cannot set up email delivery")?;
-    let engine = Arc::new(
-        Engine::new(
-            pool.clone(),
-            Arc::new(github),
-            clock.clone(),
-            settings,
-            Payments {
-                receivers: Arc::new(receivers),
-                wallets: Arc::new(NwcConnector),
-                keyring: config.keyring.clone(),
-            },
-        )
-        .with_mailer(mailer),
-    );
+    let engine = Engine::new(
+        pool.clone(),
+        Arc::new(github),
+        clock.clone(),
+        settings,
+        Payments {
+            receivers: Arc::new(receivers),
+            wallets: Arc::new(NwcConnector),
+            keyring: config.keyring.clone(),
+        },
+    )
+    .with_mailer(mailer);
+    let engine = Arc::new(match &config.bitnob {
+        Some(bitnob) => engine.with_fiat(
+            Arc::new(
+                mergetip_fiat::BitnobClient::new(bitnob.clone())
+                    .context("cannot set up the Bitnob client")?,
+            ),
+            config.lightning_network,
+        ),
+        None => engine,
+    });
 
     // The recurring expiry job; a no-op when another worker already created it.
     let mut conn = pool.acquire().await.context("cannot reach the database")?;
@@ -76,6 +100,11 @@ async fn main() -> anyhow::Result<()> {
     if config.stub_payer {
         tracing::warn!("STUB_PAYER is on: tips are marked paid without moving any money");
     }
+    let shutdown = shutdown::on_signal();
+    tokio::spawn(mergetip_worker::sampler::run(
+        pool.clone(),
+        shutdown.clone(),
+    ));
     Runner::new(pool, clock, config.runner)
         .context("cannot initialise the job runner")?
         .register(NoopHandler)
@@ -88,8 +117,60 @@ async fn main() -> anyhow::Result<()> {
         .register(NotifyPledgeHandler(engine.clone()))
         .register(SendDigestHandler(engine.clone()))
         .register(ExpireTipsHandler(engine.clone()))
+        .register(ProcessBitnobEventHandler(engine.clone()))
         .register(ReconcilePaymentHandler(engine))
-        .run(shutdown::on_signal())
+        .run(shutdown)
         .await;
+    Ok(())
+}
+
+/// One operator action, then exit. Logs the outcome for the runbook's check step.
+async fn run_ops(
+    pool: &mergetip_store::PgPool,
+    config: &WorkerConfig,
+    command: OpsCommand,
+) -> anyhow::Result<()> {
+    match command {
+        OpsCommand::FiatRetry { tip_id, operator } => {
+            let bitnob = config
+                .bitnob
+                .clone()
+                .context("FIAT_PAYOUTS_ENABLED and the Bitnob credentials are needed to re-poll")?;
+            let provider = mergetip_fiat::BitnobClient::new(bitnob)
+                .context("cannot set up the Bitnob client")?;
+            let state = mergetip_engine::ops::fiat_retry(
+                pool,
+                &provider,
+                TipId::from_uuid(tip_id),
+                &operator,
+            )
+            .await?;
+            tracing::info!(%state, "operator action done");
+        }
+        OpsCommand::FiatRefund {
+            tip_id,
+            bolt11,
+            operator,
+        } => {
+            let state = mergetip_engine::ops::fiat_refund(
+                pool,
+                TipId::from_uuid(tip_id),
+                &bolt11,
+                config.lightning_network,
+                &operator,
+                time::OffsetDateTime::now_utc(),
+            )
+            .await?;
+            tracing::info!(%state, "operator action done");
+        }
+        OpsCommand::Rewrap { operator } => {
+            let report = mergetip_engine::ops::rewrap(pool, &config.keyring, &operator).await?;
+            anyhow::ensure!(
+                report.failed == 0,
+                "{} value(s) open with neither master key; see the log",
+                report.failed
+            );
+        }
+    }
     Ok(())
 }

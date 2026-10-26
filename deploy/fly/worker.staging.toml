@@ -6,3 +6,11 @@ primary_region = "jnb"
   dockerfile = "../../backend/Dockerfile"
   [build.args]
     BIN = "mergetip-worker"
+
+[env]
+  APP_ENV = "staging"
+  METRICS_ADDR = "0.0.0.0:9091"
+
+[metrics]
+  port = 9091
+  path = "/metrics"

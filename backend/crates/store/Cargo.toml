@@ -11,6 +11,8 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+metrics.workspace = true
+rust_decimal.workspace = true
 mergetip-core.workspace = true
 hex.workspace = true
 serde.workspace = true

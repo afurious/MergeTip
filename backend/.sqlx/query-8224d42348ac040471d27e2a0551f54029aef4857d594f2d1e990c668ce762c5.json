@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE wallet_connections SET nwc_uri_ciphertext = $2\n             WHERE id = $1 AND nwc_uri_ciphertext = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8224d42348ac040471d27e2a0551f54029aef4857d594f2d1e990c668ce762c5"
+}

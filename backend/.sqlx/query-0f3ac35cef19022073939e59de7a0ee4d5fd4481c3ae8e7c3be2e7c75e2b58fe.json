@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT beneficiary_ciphertext FROM payout_methods",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "beneficiary_ciphertext",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "payout_methods",
+            "name": "beneficiary_ciphertext"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "0f3ac35cef19022073939e59de7a0ee4d5fd4481c3ae8e7c3be2e7c75e2b58fe"
+}

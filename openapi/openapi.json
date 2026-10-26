@@ -790,6 +790,191 @@
         ]
       }
     },
+    "/v1/me/payout-methods": {
+      "get": {
+        "tags": [
+          "payouts"
+        ],
+        "summary": "The receiver's payout methods.",
+        "operationId": "list_payout_methods",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PayoutMethodView"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "payouts"
+        ],
+        "summary": "Add a payout method. The account is name-checked with the provider before it is saved.",
+        "operationId": "add_payout_method",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewPayoutMethodRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayoutMethodView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`fiat_disabled`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`account_lookup_failed` or `fiat_unsupported`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/me/payout-methods/{id}": {
+      "delete": {
+        "tags": [
+          "payouts"
+        ],
+        "summary": "Remove a payout method.",
+        "operationId": "delete_payout_method",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed"
+          },
+          "404": {
+            "description": "No such method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "payouts"
+        ],
+        "summary": "Choose the default payout method.",
+        "operationId": "update_payout_method",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePayoutMethodRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayoutMethodView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/me/settings": {
       "patch": {
         "tags": [
@@ -992,6 +1177,106 @@
         ]
       }
     },
+    "/v1/payouts/countries": {
+      "get": {
+        "tags": [
+          "payouts"
+        ],
+        "summary": "Countries receivers can be paid in, with their currencies and rails.",
+        "operationId": "list_payout_countries",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PayoutCountry"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`fiat_disabled`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/payouts/countries/{code}": {
+      "get": {
+        "tags": [
+          "payouts"
+        ],
+        "summary": "The receive form for a country, generated from Bitnob's requirements.",
+        "operationId": "get_payout_country",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Two-letter country code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayoutCountryForm"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`fiat_disabled`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`fiat_unsupported`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/tips/comment": {
       "post": {
         "tags": [
@@ -1108,6 +1393,72 @@
             "bearer": []
           }
         ]
+      }
+    },
+    "/v1/webhooks/bitnob": {
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Receive a Bitnob payout event (RFC 0004): check the signature over the raw body, store it once\nper `event_id`, and queue it. Processing happens in the worker.",
+        "operationId": "receive_bitnob_webhook",
+        "parameters": [
+          {
+            "name": "x-bitnob-signature",
+            "in": "header",
+            "description": "HMAC-SHA512 of the raw body",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Raw event payload",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Stored for processing (or already stored)"
+          },
+          "400": {
+            "description": "No event ID or not JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signature missing or wrong",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Bitnob webhooks aren't configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/webhooks/github": {
@@ -1439,6 +1790,246 @@
           }
         }
       },
+      "NewPayoutMethodRequest": {
+        "type": "object",
+        "required": [
+          "country",
+          "destination_type",
+          "fields"
+        ],
+        "properties": {
+          "country": {
+            "type": "string",
+            "description": "Two-letter country code."
+          },
+          "destination_type": {
+            "type": "string",
+            "description": "`bank` or `mobile_money`."
+          },
+          "fields": {
+            "type": "object",
+            "description": "The form's values, keyed by field `key` (e.g. `account_number`, `bank_code`, `network`)."
+          },
+          "is_default": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PayoutBank": {
+        "type": "object",
+        "required": [
+          "code",
+          "name"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "PayoutCorridor": {
+        "type": "object",
+        "required": [
+          "currency",
+          "destination_types"
+        ],
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "destination_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "`bank` and/or `mobile_money`."
+          }
+        }
+      },
+      "PayoutCountry": {
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "corridors"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "corridors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PayoutCorridor"
+            }
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "PayoutCountryForm": {
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "forms"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "forms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PayoutForm"
+            }
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "PayoutField": {
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "type",
+          "required"
+        ],
+        "properties": {
+          "component": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_length": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          },
+          "min_length": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          },
+          "options": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "pattern": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "placeholder": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "PayoutForm": {
+        "type": "object",
+        "description": "One rail's form: fields exactly as Bitnob requires them (FR-10.2).",
+        "required": [
+          "destination_type",
+          "fields",
+          "banks"
+        ],
+        "properties": {
+          "banks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PayoutBank"
+            },
+            "description": "Banks to pick from, for bank rails."
+          },
+          "destination_type": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PayoutField"
+            }
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "PayoutMethodView": {
+        "type": "object",
+        "description": "A saved payout method, as its owner sees it.",
+        "required": [
+          "id",
+          "country",
+          "currency",
+          "destination_type",
+          "account",
+          "is_default"
+        ],
+        "properties": {
+          "account": {
+            "type": "string",
+            "description": "The account's last four characters, e.g. `****6789`."
+          },
+          "country": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "destination_type": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "verified_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
       "PostedTipComment": {
         "type": "object",
         "required": [
@@ -1454,6 +2045,7 @@
         "type": "string",
         "enum": [
           "lightning_address",
+          "fiat",
           "none"
         ]
       },
@@ -1464,6 +2056,15 @@
           "method"
         ],
         "properties": {
+          "fiat_min_sats": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "For `fiat`: the smallest tip the receiver's corridor pays out, estimated from the last\nquoted rate. Absent when unknown.",
+            "minimum": 0
+          },
           "login": {
             "type": "string"
           },
@@ -1546,6 +2147,17 @@
             ],
             "format": "date-time",
             "description": "When the tip's current wait ends: the confirmation deadline while it awaits confirmation,\notherwise the sender or pledge deadline."
+          },
+          "fiat": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TipFiat",
+                "description": "For tips paid out in local currency (FR-10.6); `null` for Lightning tips. Never shows\nwhere the money went."
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "id": {
             "type": "string"
@@ -1652,6 +2264,44 @@
           }
         }
       },
+      "TipFiat": {
+        "type": "object",
+        "description": "What a fiat tip was quoted and how its payout is going. Amounts are decimal strings.",
+        "required": [
+          "currency"
+        ],
+        "properties": {
+          "amount": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "currency": {
+            "type": "string"
+          },
+          "fees": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Local currency per BTC."
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`initiated`, `processing`, `success` or `failed`."
+          }
+        }
+      },
       "TipKindBody": {
         "type": "string",
         "enum": [
@@ -1698,6 +2348,19 @@
           "expired",
           "failed"
         ]
+      },
+      "UpdatePayoutMethodRequest": {
+        "type": "object",
+        "required": [
+          "is_default"
+        ],
+        "properties": {
+          "is_default": {
+            "type": "boolean",
+            "description": "Make this the default (tips are paid out here), or stop it being the default (tips go to\nthe Lightning address)."
+          }
+        },
+        "additionalProperties": false
       },
       "UserRef": {
         "type": "object",
@@ -1800,6 +2463,10 @@
     {
       "name": "users",
       "description": "Other GitHub users"
+    },
+    {
+      "name": "payouts",
+      "description": "Receiving tips in local currency"
     }
   ]
 }

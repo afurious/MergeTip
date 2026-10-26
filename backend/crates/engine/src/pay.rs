@@ -28,6 +28,7 @@ use time::{OffsetDateTime, Time, UtcOffset};
 use crate::{
     Engine, EngineError,
     comments::{enqueue_reaction, enqueue_tip_reply},
+    fiat::FiatInvoice,
     jobs::{self, NotifyPledge, PayTip, ReconcilePayment, TipMessage},
 };
 
@@ -35,6 +36,8 @@ use crate::{
 pub const PAY_TIMEOUT: Duration = Duration::from_secs(60);
 /// Payment attempts per tip before it fails for good.
 pub const MAX_PAYMENT_ATTEMPTS: i64 = 3;
+/// Payment attempts for a fiat tip: the first quote's invoice and one re-quote.
+pub const FIAT_PAYMENT_ATTEMPTS: i64 = 2;
 /// How long a pledge waits for its receiver to claim it (FR-11, journey B).
 pub const PLEDGE_WINDOW: time::Duration = time::Duration::days(30);
 /// Wait while payments are switched off globally.
@@ -109,9 +112,11 @@ impl Engine {
                 ));
             }
         };
-        let Some(address) = receiver.lightning_address.clone() else {
+        // Receivers who chose local currency are paid through the fiat provider (RFC 0004).
+        let fiat_method = self.fiat_method(&receiver).await?;
+        if fiat_method.is_none() && receiver.lightning_address.is_none() {
             return self.pledge(&tip).await;
-        };
+        }
         let Some((connection_id, uri_ciphertext)) =
             wallets::active_secret(&self.pool, tip.sender_id).await?
         else {
@@ -119,18 +124,34 @@ impl Engine {
         };
 
         // 2. An invoice for exactly this tip, validated before anything is reserved.
-        let invoice = match self.invoice(&tip, &address).await {
-            Ok(invoice) => invoice,
-            Err(err) if err.is_retryable() => {
-                return Err(EngineError::Retry {
-                    reason: err.to_string(),
-                    after: RECONCILE_FIRST,
-                });
+        let fiat_outcome = match &fiat_method {
+            Some(method) => Some(self.fiat_invoice(&tip, method).await?),
+            None => None,
+        };
+        let invoice = match fiat_outcome {
+            Some(FiatInvoice::Ready(invoice)) => invoice,
+            Some(FiatInvoice::Fail(code, detail)) => {
+                return self.fail_tip(&tip, code, detail).await;
             }
-            Err(err) => {
-                return self
-                    .fail_tip(&tip, "receiver_unpayable", Some(err.to_string()))
-                    .await;
+            // Lightning, or a tip too small for the fiat corridor: the Lightning address.
+            None | Some(FiatInvoice::Fallback) => {
+                let Some(address) = receiver.lightning_address.clone() else {
+                    return self.pledge(&tip).await;
+                };
+                match self.invoice(&tip, &address).await {
+                    Ok(invoice) => invoice,
+                    Err(err) if err.is_retryable() => {
+                        return Err(EngineError::Retry {
+                            reason: err.to_string(),
+                            after: RECONCILE_FIRST,
+                        });
+                    }
+                    Err(err) => {
+                        return self
+                            .fail_tip(&tip, "receiver_unpayable", Some(err.to_string()))
+                            .await;
+                    }
+                }
             }
         };
 
@@ -240,6 +261,7 @@ impl Engine {
             Ok(proof) => self.mark_paid(tip, attempt, &proof.preimage).await,
             Err(PayError::Wallet { code, message }) => {
                 tracing::info!(tip_id = %tip.id, %code, message, "wallet refused the payment");
+                metrics::counter!("nwc_errors_total", "code" => code.as_str()).increment(1);
                 self.finish_attempt(attempt, AttemptStatus::Failed, Some(code.as_str()))
                     .await?;
                 let err = PayError::Wallet { code, message };
@@ -249,6 +271,12 @@ impl Engine {
             // Sent, but no usable answer: the payment may have happened. Reconcile.
             Err(err @ (PayError::Timeout | PayError::Relay(_) | PayError::Protocol(_))) => {
                 tracing::warn!(tip_id = %tip.id, error = %err, "payment outcome unknown");
+                let code = match err {
+                    PayError::Timeout => "TIMEOUT",
+                    PayError::Relay(_) => "RELAY",
+                    _ => "PROTOCOL",
+                };
+                metrics::counter!("nwc_errors_total", "code" => code).increment(1);
                 let mut tx = self.pool.begin().await?;
                 let attempt = payment_attempts::set_status(
                     &mut *tx,
@@ -288,10 +316,15 @@ impl Engine {
                 .fail_tip(tip, terminal_code, Some(err.to_string()))
                 .await;
         }
-        if payment_attempts::count_for_tip(&self.pool, tip.id).await? >= MAX_PAYMENT_ATTEMPTS {
-            return self
-                .fail_tip(tip, "payment_failed", Some(err.to_string()))
-                .await;
+        // A fiat tip gets one re-quote (RFC 0004); its invoice most likely expired.
+        let fresh = tips::get(&self.pool, tip.id).await?;
+        let (max, code) = if fresh.fiat.payout_id.is_some() {
+            (FIAT_PAYMENT_ATTEMPTS, "fiat_quote_expired")
+        } else {
+            (MAX_PAYMENT_ATTEMPTS, "payment_failed")
+        };
+        if payment_attempts::count_for_tip(&self.pool, tip.id).await? >= max {
+            return self.fail_tip(tip, code, Some(err.to_string())).await;
         }
         Err(EngineError::Retry {
             reason: err.to_string(),
@@ -314,6 +347,15 @@ impl Engine {
                 "preimage does not match the payment hash".into(),
             ));
         }
+        let attempts = payment_attempts::count_for_tip(&self.pool, tip.id).await?;
+        metrics::histogram!("payment_attempts_per_tip").record(attempts as f64);
+        // A fiat payout is only `paid` once Bitnob confirms delivery (webhook); paying its
+        // invoice moves it to `fiat_processing`.
+        let fiat = tips::get(&self.pool, tip.id)
+            .await?
+            .fiat
+            .payout_id
+            .is_some();
         let mut tx = self.pool.begin().await?;
         payment_attempts::set_status(
             &mut *tx,
@@ -327,7 +369,11 @@ impl Engine {
             &mut tx,
             tip.id,
             TipState::Paying,
-            TipState::Paid,
+            if fiat {
+                TipState::FiatProcessing
+            } else {
+                TipState::Paid
+            },
             &TipPatch {
                 payment_hash: Some(attempt.payment_hash.clone()),
                 preimage: Some(preimage),
@@ -336,6 +382,12 @@ impl Engine {
             json!({ "attempt_id": attempt.id }),
         )
         .await?;
+        if fiat {
+            tx.commit().await?;
+            tracing::info!(tip_id = %tip.id, sats = tip.amount.get(), "fiat payout funded");
+            // Bitnob may already have confirmed the payout before the wallet answered.
+            return self.apply_recorded_payout_status(tip.id).await;
+        }
         let installation = installations::get(&mut *tx, tip.installation_id).await?;
         enqueue_tip_reply(
             &mut tx,

@@ -17,3 +17,8 @@ primary_region = "jnb"
     path = "/healthz"
     interval = "15s"
     timeout = "2s"
+
+# Migrations run once per release, before new machines start (they are additive only).
+[deploy]
+  # The image ENTRYPOINT is /app; this is its argument.
+  release_command = "migrate"
