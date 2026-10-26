@@ -109,3 +109,39 @@ async fn a_receiver_no_longer_on_the_pr_is_not_paid(pool: PgPool) -> sqlx::Resul
     assert_eq!(h.queued(PayTip::KIND).await, 0);
     Ok(())
 }
+
+/// The same repo name and PR number under another installation (a transferred or reinstalled
+/// repo) must not release holds made under this one.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn another_installations_merge_leaves_the_holds_alone(pool: PgPool) -> sqlx::Result<()> {
+    let mut h = two_holds(pool).await;
+    h.set_pull("closed", true);
+    mergetip_store::installations::upsert(
+        &h.pool,
+        mergetip_core::GithubInstallationId::new(88),
+        "acme",
+    )
+    .await
+    .unwrap();
+
+    let payload = serde_json::json!({
+        "action": "closed",
+        "number": 42,
+        "pull_request": { "number": 42, "merged": true },
+        "repository": {
+            "id": 5, "name": "widgets", "full_name": REPO,
+            "owner": { "id": 3, "login": "acme", "type": "Organization" }
+        },
+        "installation": { "id": 88 }
+    });
+    h.deliver("pull_request", "closed", payload).await;
+    h.drain().await;
+    assert_eq!(h.states().await, ["held", "held"]);
+    assert_eq!(h.queued(PayTip::KIND).await, 0);
+
+    // This installation's own event still releases them.
+    h.pull_closed(true).await;
+    h.drain().await;
+    assert_eq!(h.states().await, ["paying", "paying"]);
+    Ok(())
+}
