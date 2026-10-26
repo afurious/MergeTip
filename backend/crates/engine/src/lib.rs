@@ -14,6 +14,7 @@ mod fiat;
 mod holds;
 pub mod jobs;
 mod notices;
+pub mod ops;
 mod pay;
 mod payouts;
 mod replies;

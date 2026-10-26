@@ -616,3 +616,113 @@ async fn a_success_that_beats_the_wallet_still_lands(pool: PgPool) -> sqlx::Resu
     assert_eq!(paid_out_replies(&w).await, 1);
     Ok(())
 }
+
+async fn stuck(w: &World) -> TipId {
+    let (tip, reference) = funded(w).await;
+    webhook(
+        w,
+        "ev-stuck",
+        "payouts.withdrawal.expired",
+        "po_1",
+        &reference,
+    )
+    .await;
+    assert_eq!(w.tip(tip).await.state, TipState::FiatStuck);
+    tip
+}
+
+async fn last_event_detail(w: &World, tip: TipId) -> serde_json::Value {
+    sqlx::query_scalar!(
+        "SELECT detail FROM tip_events WHERE tip_id = $1 ORDER BY id DESC LIMIT 1",
+        tip.as_uuid()
+    )
+    .fetch_one(&w.pool)
+    .await
+    .unwrap()
+}
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn an_operator_retry_lands_a_delivered_payout(pool: PgPool) -> sqlx::Result<()> {
+    let w = World::new(pool).await;
+    let tip = stuck(&w).await;
+    // Bitnob delivered after all.
+    w.fiat.state().payouts.get_mut("po_1").unwrap().status = "COMPLETED".into();
+
+    let state = mergetip_engine::ops::fiat_retry(&w.pool, w.fiat.as_ref(), tip, "ada")
+        .await
+        .unwrap();
+    assert_eq!(state, TipState::Paid);
+    let events = sqlx::query_scalar!(
+        "SELECT detail FROM tip_events WHERE tip_id = $1 AND from_state = 'fiat_stuck'",
+        tip.as_uuid()
+    )
+    .fetch_one(&w.pool)
+    .await?;
+    assert_eq!(events, json!({ "operator": "ada", "action": "fiat-retry" }));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn a_retry_of_a_still_failed_payout_is_stuck_again(pool: PgPool) -> sqlx::Result<()> {
+    let w = World::new(pool).await;
+    let tip = stuck(&w).await;
+    w.fiat.state().payouts.get_mut("po_1").unwrap().status = "FAILED".into();
+    let state = mergetip_engine::ops::fiat_retry(&w.pool, w.fiat.as_ref(), tip, "ada")
+        .await
+        .unwrap();
+    assert_eq!(state, TipState::FiatStuck);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn a_refund_is_recorded_only_for_the_full_tip(pool: PgPool) -> sqlx::Result<()> {
+    let w = World::new(pool).await;
+    let tip = stuck(&w).await;
+    let invoice = |sats: u64| {
+        mint_invoice(&MintParams {
+            amount: Msats::new(sats * 1_000),
+            seed: SEED,
+            ..MintParams::default()
+        })
+    };
+    let now = OffsetDateTime::now_utc();
+    let short = mergetip_engine::ops::fiat_refund(
+        &w.pool,
+        tip,
+        &invoice(4_000).bolt11,
+        Network::Regtest,
+        "ada",
+        now,
+    )
+    .await;
+    assert!(matches!(
+        short,
+        Err(mergetip_engine::ops::OpsError::BadRefund(_))
+    ));
+    assert_eq!(w.tip(tip).await.state, TipState::FiatStuck);
+
+    let refund = invoice(5_000);
+    let state = mergetip_engine::ops::fiat_refund(
+        &w.pool,
+        tip,
+        &refund.bolt11,
+        Network::Regtest,
+        "ada",
+        now,
+    )
+    .await
+    .unwrap();
+    assert_eq!(state, TipState::Refunded);
+    let detail = last_event_detail(&w, tip).await;
+    assert_eq!(detail["operator"], "ada");
+    assert_eq!(detail["action"], "fiat-refund");
+    assert_eq!(detail["refund_payment_hash"], refund.payment_hash);
+
+    // Only stuck payouts can be retried or refunded.
+    let again = mergetip_engine::ops::fiat_retry(&w.pool, w.fiat.as_ref(), tip, "ada").await;
+    assert!(matches!(
+        again,
+        Err(mergetip_engine::ops::OpsError::NotStuck(TipState::Refunded))
+    ));
+    Ok(())
+}

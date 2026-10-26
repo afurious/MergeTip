@@ -3,13 +3,16 @@
 use std::sync::Arc;
 
 use anyhow::Context;
+use clap::Parser;
 use mergetip_core::SystemClock;
+use mergetip_core::TipId;
 use mergetip_engine::{Engine, EngineSettings, Payments};
 use mergetip_github::OctocrabGitHub;
 use mergetip_payer::{LnurlClient, nwc::NwcConnector};
 use mergetip_runtime::{config::ProcessEnv, db, shutdown, telemetry};
 use mergetip_worker::{
     Runner, WorkerConfig,
+    cli::{Cli, Command, OpsCommand},
     handlers::{
         ExpireTipsHandler, NoopHandler, NotifyPledgeHandler, PayTipHandler, PostReplyHandler,
         ProcessBitnobEventHandler, ProcessEventHandler, ReconcilePaymentHandler,
@@ -20,6 +23,7 @@ use mergetip_worker::{
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
+    let cli = Cli::parse();
     let config = WorkerConfig::from_env(&ProcessEnv).context("invalid configuration")?;
     telemetry::init(config.app_env);
 
@@ -27,6 +31,10 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("cannot connect to the database")?;
     db::migrate(&pool).await.context("migrations failed")?;
+
+    if let Some(Command::Ops(command)) = cli.command {
+        return run_ops(&pool, &config, command).await;
+    }
 
     let key_path = &config.github.private_key_path;
     let private_key = std::fs::read(key_path)
@@ -100,5 +108,42 @@ async fn main() -> anyhow::Result<()> {
         .register(ReconcilePaymentHandler(engine))
         .run(shutdown::on_signal())
         .await;
+    Ok(())
+}
+
+/// One operator action, then exit. Prints the tip's new state for the runbook's check step.
+async fn run_ops(
+    pool: &mergetip_store::PgPool,
+    config: &WorkerConfig,
+    command: OpsCommand,
+) -> anyhow::Result<()> {
+    let state = match command {
+        OpsCommand::FiatRetry { tip_id, operator } => {
+            let bitnob = config
+                .bitnob
+                .clone()
+                .context("FIAT_PAYOUTS_ENABLED and the Bitnob credentials are needed to re-poll")?;
+            let provider = mergetip_fiat::BitnobClient::new(bitnob)
+                .context("cannot set up the Bitnob client")?;
+            mergetip_engine::ops::fiat_retry(pool, &provider, TipId::from_uuid(tip_id), &operator)
+                .await?
+        }
+        OpsCommand::FiatRefund {
+            tip_id,
+            bolt11,
+            operator,
+        } => {
+            mergetip_engine::ops::fiat_refund(
+                pool,
+                TipId::from_uuid(tip_id),
+                &bolt11,
+                config.lightning_network,
+                &operator,
+                time::OffsetDateTime::now_utc(),
+            )
+            .await?
+        }
+    };
+    tracing::info!(%state, "operator action done");
     Ok(())
 }

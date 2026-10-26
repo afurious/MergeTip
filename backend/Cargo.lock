@@ -2294,6 +2294,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "clap",
  "dotenvy",
  "getrandom 0.4.3",
  "hex",
@@ -2314,6 +2315,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "uuid",
 ]
 
 [[package]]

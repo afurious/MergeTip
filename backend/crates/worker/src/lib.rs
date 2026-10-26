@@ -1,5 +1,6 @@
 //! MergeTip job runner: claims jobs from Postgres and dispatches them to handlers.
 
+pub mod cli;
 pub mod config;
 pub mod handlers;
 pub mod runner;

@@ -1,0 +1,13 @@
+# Prometheus alert rules for MergeTip (implementation plan "Metrics and alerts").
+# Each alert links its runbook in docs/runbooks/.
+groups:
+  - name: mergetip-fiat
+    rules:
+      - alert: FiatPayoutStuck
+        expr: max(tips_in_state{state="fiat_stuck"}) > 0
+        for: 30m
+        labels:
+          severity: sev2
+        annotations:
+          summary: "{{ $value }} fiat payout(s) stuck: sats with Bitnob, fiat not delivered"
+          runbook: docs/runbooks/fiat-stuck.md

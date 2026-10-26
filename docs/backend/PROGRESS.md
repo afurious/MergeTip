@@ -67,7 +67,7 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 - [x] 5.3 Receiver payout API
 - [x] 5.4 Fiat pay path
 - [x] 5.5 Bitnob webhooks
-- [ ] 5.6 Stuck-payout operations
+- [x] 5.6 Stuck-payout operations
 - [ ] 5.7 Metrics and alerts
 - [ ] 5.8 Abuse and HTTP hardening
 - [ ] 5.9 Critical-test audit
