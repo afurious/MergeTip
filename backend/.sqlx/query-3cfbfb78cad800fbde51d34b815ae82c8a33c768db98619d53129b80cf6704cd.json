@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE wallet_connections SET methods = '{pay_invoice}'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "3cfbfb78cad800fbde51d34b815ae82c8a33c768db98619d53129b80cf6704cd"
+}

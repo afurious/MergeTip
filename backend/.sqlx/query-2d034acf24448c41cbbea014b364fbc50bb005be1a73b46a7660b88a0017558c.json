@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT nwc_uri_ciphertext, methods FROM wallet_connections WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "nwc_uri_ciphertext",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "wallet_connections",
+            "name": "nwc_uri_ciphertext"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "methods",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "wallet_connections",
+            "name": "methods"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "2d034acf24448c41cbbea014b364fbc50bb005be1a73b46a7660b88a0017558c"
+}

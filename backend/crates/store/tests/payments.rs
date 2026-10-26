@@ -40,6 +40,7 @@ fn attempt<'a>(tip: &Tip, hash: &'a str) -> NewAttempt<'a> {
         bolt11: "lnbcrt1...",
         amount: Msats::new(2_100_000),
         invoice_expires_at: OffsetDateTime::now_utc() + Duration::minutes(10),
+        wallet_connection_id: None,
     }
 }
 

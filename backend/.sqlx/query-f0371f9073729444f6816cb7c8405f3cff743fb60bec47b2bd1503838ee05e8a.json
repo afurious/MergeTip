@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, tip_id, payment_hash, bolt11, amount_msat, invoice_expires_at, status,\n               nwc_error_code, started_at, finished_at\n        FROM payment_attempts WHERE id = $1\n        ",
+  "query": "\n        SELECT id, tip_id, payment_hash, bolt11, amount_msat, invoice_expires_at, status,\n               nwc_error_code, started_at, finished_at, wallet_connection_id\n        FROM payment_attempts\n        WHERE tip_id = $1 AND status IN ('pending', 'unknown')\n        ",
   "describe": {
     "columns": [
       {
@@ -112,6 +112,17 @@
             "name": "finished_at"
           }
         }
+      },
+      {
+        "ordinal": 10,
+        "name": "wallet_connection_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "payment_attempts",
+            "name": "wallet_connection_id"
+          }
+        }
       }
     ],
     "parameters": {
@@ -129,8 +140,9 @@
       false,
       true,
       false,
+      true,
       true
     ]
   },
-  "hash": "ef025c6ad66d52daf62143e0900c349fbe7fd888e29e0fd345786a180d382623"
+  "hash": "f0371f9073729444f6816cb7c8405f3cff743fb60bec47b2bd1503838ee05e8a"
 }

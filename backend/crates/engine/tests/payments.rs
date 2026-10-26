@@ -583,3 +583,99 @@ async fn a_worker_killed_mid_payment_never_pays_twice(pool: PgPool) -> sqlx::Res
     assert_eq!(successes, 1);
     Ok(())
 }
+
+/// M3 review: the paying wallet can't be asked (no `lookup_invoice`) and the invoice expired.
+/// Expiry doesn't prove the wallet didn't pay, so the tip stops for review instead of paying
+/// again.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn an_unconfirmable_payment_is_never_paid_again(pool: PgPool) -> sqlx::Result<()> {
+    let mut w = World::new(pool).await;
+    let address = w.address("reviewer");
+    let tip = w
+        .paying_tip("reviewer", Some(&address), behaviour::PAYS_SILENTLY_SATS)
+        .await;
+    w.engine.pay_tip(tip, false).await.unwrap();
+    assert_eq!(w.wallet.paid_hashes().len(), 1, "the wallet did pay");
+    let (tip_id, attempt_id) = w.reconcile_job().await;
+    sqlx::query!("DELETE FROM jobs").execute(&w.pool).await?;
+    // The connection can't look invoices up.
+    sqlx::query!("UPDATE wallet_connections SET methods = '{pay_invoice}'")
+        .execute(&w.pool)
+        .await?;
+
+    w.clock.advance(time::Duration::minutes(12));
+    let outcome = w
+        .engine
+        .reconcile_payment(tip_id, attempt_id)
+        .await
+        .unwrap();
+    assert_eq!(outcome, ReconcileOutcome::Done);
+    assert_eq!(
+        w.state(tip).await,
+        state("failed", Some("payment_unconfirmed"))
+    );
+    assert_eq!(w.attempts(tip).await, ["unknown"], "kept as the record");
+    assert_eq!(w.queued(PayTip::KIND).await, 0, "never paid a second time");
+    assert_eq!(w.wallet.paid_hashes().len(), 1);
+    Ok(())
+}
+
+/// M3 review: after a timeout the sender connects a different wallet. Reconciliation must ask
+/// the wallet that paid, not the new one (which would say "never heard of it").
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn reconciliation_asks_the_wallet_that_paid(pool: PgPool) -> sqlx::Result<()> {
+    let mut w = World::new(pool).await;
+    let address = w.address("reviewer");
+    let tip = w
+        .paying_tip("reviewer", Some(&address), behaviour::PAYS_SILENTLY_SATS)
+        .await;
+    w.engine.pay_tip(tip, false).await.unwrap();
+    let (tip_id, attempt_id) = w.reconcile_job().await;
+
+    // The sender replaces their wallet with another one.
+    let second = MockWallet::start(&w._relay.url().await.to_string(), SEED)
+        .await
+        .unwrap();
+    let sender = users::get_by_login(&w.pool, "maintainer").await.unwrap();
+    let id = uuid::Uuid::new_v4();
+    let sealed = w
+        .keyring
+        .seal(
+            second.uri().as_bytes(),
+            format!("wallet_connections.nwc_uri:{id}").as_bytes(),
+        )
+        .unwrap();
+    let mut conn = w.pool.acquire().await?;
+    wallets::replace(
+        &mut conn,
+        &NewConnection {
+            id,
+            user_id: sender.id,
+            nwc_uri_ciphertext: &sealed,
+            wallet_pubkey: "pk2",
+            relays: &["wss://relay".to_owned()],
+            methods: &["pay_invoice", "get_info", "lookup_invoice"].map(String::from),
+            encryption: "nip44",
+        },
+        OffsetDateTime::now_utc(),
+    )
+    .await
+    .unwrap();
+
+    w.clock.advance(time::Duration::minutes(12));
+    let outcome = w
+        .engine
+        .reconcile_payment(tip_id, attempt_id)
+        .await
+        .unwrap();
+    assert_eq!(outcome, ReconcileOutcome::Done);
+    assert_eq!(w.state(tip).await, state("paid", None));
+    assert_eq!(
+        w.wallet.paid_hashes().len(),
+        1,
+        "paid once, by the first wallet"
+    );
+    assert!(second.paid_hashes().is_empty());
+    assert_eq!(w.queued(PayTip::KIND).await, 0);
+    Ok(())
+}

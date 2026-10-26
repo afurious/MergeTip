@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        UPDATE payment_attempts\n        SET status = $2, nwc_error_code = COALESCE($3, nwc_error_code),\n            finished_at = CASE WHEN $4 THEN $5 ELSE finished_at END\n        WHERE id = $1\n        RETURNING id, tip_id, payment_hash, bolt11, amount_msat, invoice_expires_at, status,\n                  nwc_error_code, started_at, finished_at\n        ",
+  "query": "\n        SELECT id, tip_id, payment_hash, bolt11, amount_msat, invoice_expires_at, status,\n               nwc_error_code, started_at, finished_at, wallet_connection_id\n        FROM payment_attempts WHERE id = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -112,15 +112,22 @@
             "name": "finished_at"
           }
         }
+      },
+      {
+        "ordinal": 10,
+        "name": "wallet_connection_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "payment_attempts",
+            "name": "wallet_connection_id"
+          }
+        }
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Text",
-        "Text",
-        "Bool",
-        "Timestamptz"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -133,8 +140,9 @@
       false,
       true,
       false,
+      true,
       true
     ]
   },
-  "hash": "e38d06e73ac69c7f7ed2bf7df74fb6eedb6dce12b6cfd969c05bd856f0cf97c9"
+  "hash": "ca4d56e6e6009bad49bf848a02c0ff683c4f068d6d061e89c53e684d2f531701"
 }

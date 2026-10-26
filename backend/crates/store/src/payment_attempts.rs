@@ -65,6 +65,9 @@ pub struct PaymentAttempt {
     pub nwc_error_code: Option<String>,
     pub started_at: OffsetDateTime,
     pub finished_at: Option<OffsetDateTime>,
+    /// The wallet connection that was asked to pay; `None` for attempts made before it was
+    /// recorded.
+    pub wallet_connection_id: Option<Uuid>,
 }
 
 struct AttemptRow {
@@ -78,6 +81,7 @@ struct AttemptRow {
     nwc_error_code: Option<String>,
     started_at: OffsetDateTime,
     finished_at: Option<OffsetDateTime>,
+    wallet_connection_id: Option<Uuid>,
 }
 
 impl TryFrom<AttemptRow> for PaymentAttempt {
@@ -95,6 +99,7 @@ impl TryFrom<AttemptRow> for PaymentAttempt {
             nwc_error_code: row.nwc_error_code,
             started_at: row.started_at,
             finished_at: row.finished_at,
+            wallet_connection_id: row.wallet_connection_id,
         })
     }
 }
@@ -106,6 +111,8 @@ pub struct NewAttempt<'a> {
     pub bolt11: &'a str,
     pub amount: Msats,
     pub invoice_expires_at: OffsetDateTime,
+    /// The connection about to be asked to pay (always set by the engine).
+    pub wallet_connection_id: Option<Uuid>,
 }
 
 /// Records a `pending` attempt. Fails with [`StoreError::Conflict`] if the tip already has an
@@ -119,16 +126,17 @@ pub async fn insert_pending(
         AttemptRow,
         r#"
         INSERT INTO payment_attempts (tip_id, payment_hash, bolt11, amount_msat,
-                                      invoice_expires_at, status)
-        VALUES ($1, $2, $3, $4, $5, 'pending')
+                                      invoice_expires_at, status, wallet_connection_id)
+        VALUES ($1, $2, $3, $4, $5, 'pending', $6)
         RETURNING id, tip_id, payment_hash, bolt11, amount_msat, invoice_expires_at, status,
-                  nwc_error_code, started_at, finished_at
+                  nwc_error_code, started_at, finished_at, wallet_connection_id
         "#,
         new.tip_id.as_uuid(),
         new.payment_hash,
         new.bolt11,
         amount,
         new.invoice_expires_at,
+        new.wallet_connection_id,
     )
     .fetch_one(exec)
     .await
@@ -153,7 +161,7 @@ pub async fn set_status(
             finished_at = CASE WHEN $4 THEN $5 ELSE finished_at END
         WHERE id = $1
         RETURNING id, tip_id, payment_hash, bolt11, amount_msat, invoice_expires_at, status,
-                  nwc_error_code, started_at, finished_at
+                  nwc_error_code, started_at, finished_at, wallet_connection_id
         "#,
         id,
         status.as_str(),
@@ -176,7 +184,7 @@ pub async fn open_for_tip(
         AttemptRow,
         r#"
         SELECT id, tip_id, payment_hash, bolt11, amount_msat, invoice_expires_at, status,
-               nwc_error_code, started_at, finished_at
+               nwc_error_code, started_at, finished_at, wallet_connection_id
         FROM payment_attempts
         WHERE tip_id = $1 AND status IN ('pending', 'unknown')
         "#,
@@ -192,7 +200,7 @@ pub async fn get(exec: impl PgExecutor<'_>, id: Uuid) -> StoreResult<PaymentAtte
         AttemptRow,
         r#"
         SELECT id, tip_id, payment_hash, bolt11, amount_msat, invoice_expires_at, status,
-               nwc_error_code, started_at, finished_at
+               nwc_error_code, started_at, finished_at, wallet_connection_id
         FROM payment_attempts WHERE id = $1
         "#,
         id,

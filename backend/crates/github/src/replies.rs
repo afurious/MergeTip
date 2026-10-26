@@ -229,6 +229,12 @@ pub fn failed(
             "😕 @{sender}, **{amount}** is above your per-tip limit of **{}**. [Manage limits]({}).",
             limits.per_tip_max, links.limits
         ),
+        // The wallet may or may not have paid: never claim "nothing was charged".
+        "payment_unconfirmed" => format!(
+            "😕 @{sender}, I couldn't confirm whether your wallet paid the **{amount}** tip to \
+             @{receiver}. Check your wallet's history before tipping again; MergeTip won't \
+             retry it."
+        ),
         "receiver_unpayable" => format!(
             "😕 @{sender}, @{receiver}'s Lightning address couldn't accept this payment, so \
              nothing was sent."
@@ -413,6 +419,7 @@ mod tests {
             "daily_cap_reached",
             "over_per_tip_cap",
             "receiver_unpayable",
+            "payment_unconfirmed",
             "payment_failed",
         ];
         let mut rendered: Vec<String> = codes

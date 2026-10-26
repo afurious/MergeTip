@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, tip_id, payment_hash, bolt11, amount_msat, invoice_expires_at, status,\n               nwc_error_code, started_at, finished_at\n        FROM payment_attempts\n        WHERE tip_id = $1 AND status IN ('pending', 'unknown')\n        ",
+  "query": "\n        INSERT INTO payment_attempts (tip_id, payment_hash, bolt11, amount_msat,\n                                      invoice_expires_at, status, wallet_connection_id)\n        VALUES ($1, $2, $3, $4, $5, 'pending', $6)\n        RETURNING id, tip_id, payment_hash, bolt11, amount_msat, invoice_expires_at, status,\n                  nwc_error_code, started_at, finished_at, wallet_connection_id\n        ",
   "describe": {
     "columns": [
       {
@@ -112,10 +112,26 @@
             "name": "finished_at"
           }
         }
+      },
+      {
+        "ordinal": 10,
+        "name": "wallet_connection_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "payment_attempts",
+            "name": "wallet_connection_id"
+          }
+        }
       }
     ],
     "parameters": {
       "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Int8",
+        "Timestamptz",
         "Uuid"
       ]
     },
@@ -129,8 +145,9 @@
       false,
       true,
       false,
+      true,
       true
     ]
   },
-  "hash": "e763f2825a167c272e9a01d44412d91e45214a5bfd85e50e2af4a2b7cf0d1f64"
+  "hash": "5df25d0fc5d67627d97b1cd5ccf30e16a505c4966f7eeb2227ea8c2d87772dcd"
 }
