@@ -13,3 +13,4 @@ receiver_unpayable: 😕 @maintainer, @reviewer's Lightning address couldn't acc
 payment_failed: 😕 @maintainer, the **2,100 sats** tip to @reviewer couldn't be paid. Nothing was charged; please try again later.
 ⚡ @reviewer, @maintainer sent you **2,100 sats** for the docs. Claim within 30 days → [Claim your sats](https://mergetip.dev/claim/q2V3cGxhaW5fdG9rZW4)
 ⚡ @reviewer, @maintainer sent you **2,100 sats** for the docs.
+⌛ @maintainer, @reviewer didn't claim your **2,100 sats** tip within 30 days, so it expired. Nothing was charged.

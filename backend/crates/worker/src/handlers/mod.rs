@@ -5,8 +5,8 @@ mod engine;
 mod noop;
 
 pub use engine::{
-    NotifyPledgeHandler, PayTipHandler, PostReplyHandler, ProcessEventHandler,
-    ReconcilePaymentHandler, ResolveHeldHandler, ResumeSenderTipsHandler, SendDigestHandler,
-    VerifyTipHandler,
+    EXPIRY_INTERVAL, ExpireTipsHandler, NotifyPledgeHandler, PayTipHandler, PostReplyHandler,
+    ProcessEventHandler, ReconcilePaymentHandler, ResolveHeldHandler, ResumeSenderTipsHandler,
+    SendDigestHandler, VerifyTipHandler,
 };
 pub use noop::NoopHandler;

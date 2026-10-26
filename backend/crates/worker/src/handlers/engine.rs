@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use mergetip_engine::{
     Engine, EngineError, ReconcileOutcome,
     jobs::{
-        JobPayload, NotifyPledge, PayTip, PostReply, ProcessEvent, ReconcilePayment, ResolveHeld,
-        ResumeSenderTips, SendDigest, VerifyTip,
+        ExpireTips, JobPayload, NotifyPledge, PayTip, PostReply, ProcessEvent, ReconcilePayment,
+        ResolveHeld, ResumeSenderTips, SendDigest, VerifyTip,
     },
 };
 use mergetip_store::jobs::Job;
@@ -97,6 +97,28 @@ engine_handler!(
     SendDigest,
     |engine, payload| engine.send_digest(payload.user_id)
 );
+
+/// How often the expiry job runs. Deadlines are checked against the tips' own timestamps, so a
+/// run that comes late still closes exactly the right tips.
+pub const EXPIRY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Closes tips past their deadline and queues reminders, then reschedules itself.
+pub struct ExpireTipsHandler(pub Arc<Engine>);
+
+#[async_trait]
+impl JobHandler for ExpireTipsHandler {
+    fn kind(&self) -> &'static str {
+        ExpireTips::KIND
+    }
+
+    async fn handle(&self, ctx: &JobContext, _job: &Job) -> Result<JobOutcome, JobError> {
+        self.0
+            .expire_tips()
+            .await
+            .map_err(|err| job_error(ctx, err))?;
+        Ok(JobOutcome::Reschedule(EXPIRY_INTERVAL))
+    }
+}
 
 /// Pays a tip. On the job's last attempt the engine fails the tip rather than asking for
 /// another retry, so a tip can't be left in `paying` by a dead-lettered job.

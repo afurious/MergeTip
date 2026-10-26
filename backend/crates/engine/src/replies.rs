@@ -106,6 +106,7 @@ impl Engine {
                 None => replies::pledge_claimed(&context),
             },
             TipMessage::Held => replies::held(&context),
+            TipMessage::Expired => replies::pledge_expired(&context),
             TipMessage::Cancelled => replies::cancelled(
                 tip.error_code.as_deref().unwrap_or("unknown"),
                 &context,

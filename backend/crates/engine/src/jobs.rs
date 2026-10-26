@@ -81,6 +81,21 @@ impl JobPayload for ResumeSenderTips {
     const KIND: &'static str = "resume_sender_tips";
 }
 
+/// Close every tip past its deadline and queue due reminders. Recurring: one live job
+/// (dedupe key `expire_tips`) that reschedules itself every minute.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExpireTips {}
+
+impl JobPayload for ExpireTips {
+    const KIND: &'static str = "expire_tips";
+}
+
+/// Makes sure the recurring expiry job exists (a no-op when it already does). Workers call it at
+/// startup.
+pub async fn ensure_expiry_job(conn: &mut PgConnection) -> StoreResult<Enqueued> {
+    jobs::enqueue(conn, &ExpireTips {}.job().dedupe_key(ExpireTips::KIND)).await
+}
+
 /// Find an email for a new pledge's receiver and queue their digest.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NotifyPledge {
@@ -169,6 +184,8 @@ pub enum TipMessage {
     Failed,
     /// The tip ended before any money moved (`tips.error_code` says why).
     Cancelled,
+    /// A pledge expired unclaimed; tells the sender nothing was charged.
+    Expired,
 }
 
 impl TipMessage {
@@ -189,6 +206,7 @@ impl TipMessage {
             Self::Pledged => "pledged",
             Self::Failed => "failed",
             Self::Cancelled => "cancelled",
+            Self::Expired => "expired",
         }
     }
 }

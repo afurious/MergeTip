@@ -152,6 +152,15 @@ pub fn pledged(tip: &TipContext<'_>, claim_link: &str) -> String {
     )
 }
 
+/// Told to the sender when a pledge expires unclaimed: nothing moved, and they may tip again.
+pub fn pledge_expired(tip: &TipContext<'_>) -> String {
+    format!(
+        "⌛ @{}, @{} didn't claim your **{}** tip within 30 days, so it expired. Nothing was \
+         charged.",
+        tip.sender, tip.receiver, tip.amount
+    )
+}
+
 /// The pledge reply when the pledge was already claimed (or closed) before the reply was posted:
 /// no link to a token that no longer works.
 pub fn pledge_claimed(tip: &TipContext<'_>) -> String {
@@ -401,6 +410,7 @@ mod tests {
             "https://mergetip.dev/claim/q2V3cGxhaW5fdG9rZW4",
         ));
         rendered.push(pledge_claimed(&tip(Some("the docs"))));
+        rendered.push(pledge_expired(&tip(Some("the docs"))));
         insta::assert_snapshot!(rendered.join("\n"));
     }
 
