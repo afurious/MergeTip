@@ -55,10 +55,7 @@ pub async fn receive_status(
     _auth: AuthUser,
     Path(login): Path<String>,
 ) -> Result<Json<ReceiveStatus>, ApiError> {
-    let valid = !login.is_empty()
-        && login.len() <= 39
-        && login.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
-    if !valid {
+    if !mergetip_parser::is_valid_login(&login) {
         return Err(ApiError::not_found());
     }
     let user = match users::get_by_login(state.pool(), &login).await {

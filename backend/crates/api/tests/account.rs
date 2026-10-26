@@ -251,6 +251,10 @@ async fn receive_status_says_whether_a_tip_pays_now(pool: PgPool) -> sqlx::Resul
     );
     assert_eq!(status_of("maintainer").await.1["method"], "none");
     assert_eq!(status_of("never-seen").await.1["method"], "none");
+    // Logins a `/tip` command can't name are not looked up.
+    for login in ["-reviewer", "reviewer-", "re--viewer"] {
+        assert_eq!(status_of(login).await.0, StatusCode::NOT_FOUND, "{login}");
+    }
     let (status, _) = send(&app, "GET", "/v1/users/x/receive-status", None, None).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     Ok(())
