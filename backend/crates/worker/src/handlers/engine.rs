@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use mergetip_engine::{
     Engine, EngineError, ReconcileOutcome,
     jobs::{
-        JobPayload, PayTip, PostReply, ProcessEvent, ReconcilePayment, ResolveHeld,
-        ResumeSenderTips, VerifyTip,
+        JobPayload, NotifyPledge, PayTip, PostReply, ProcessEvent, ReconcilePayment, ResolveHeld,
+        ResumeSenderTips, SendDigest, VerifyTip,
     },
 };
 use mergetip_store::jobs::Job;
@@ -82,6 +82,20 @@ engine_handler!(
     ResumeSenderTipsHandler,
     ResumeSenderTips,
     |engine, payload| engine.resume_sender_tips(payload.user_id)
+);
+
+engine_handler!(
+    /// Finds an email for a new pledge's receiver and queues their digest.
+    NotifyPledgeHandler,
+    NotifyPledge,
+    |engine, payload| engine.notify_pledge(payload.tip_id)
+);
+
+engine_handler!(
+    /// Emails a receiver their due pledge notices, at most once a day.
+    SendDigestHandler,
+    SendDigest,
+    |engine, payload| engine.send_digest(payload.user_id)
 );
 
 /// Pays a tip. On the job's last attempt the engine fails the tip rather than asking for

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO users (github_id, github_login, email_opt_out) VALUES (11, 'reviewer', true)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "a6d9151f4c5a94203a3db6ddbd7016451cdbd84326b67575d820b3f6cb853746"
+}

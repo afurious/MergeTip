@@ -147,6 +147,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/email/unsubscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Unsubscribe from the link in an email; answers with a short page. */
+        get: operations["unsubscribe_link"];
+        put?: never;
+        /** One-click unsubscribe (RFC 8058), sent by mail clients from the `List-Unsubscribe` header. */
+        post: operations["unsubscribe_one_click"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/health": {
         parameters: {
             query?: never;
@@ -244,6 +262,26 @@ export interface paths {
         put?: never;
         /** Receive a GitHub App webhook delivery. */
         post: operations["receive_github_webhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/webhooks/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Receive a Resend delivery event (Svix-signed) and update the email status of every tip the
+         *     message covered (FR-11.7).
+         */
+        post: operations["receive_resend_webhook"];
         delete?: never;
         options?: never;
         head?: never;
@@ -820,6 +858,68 @@ export interface operations {
             };
         };
     };
+    unsubscribe_link: {
+        parameters: {
+            query: {
+                /** @description The signed token from the email's link. */
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unsubscribed (HTML page) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": unknown;
+                };
+            };
+            /** @description `invalid_token` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    unsubscribe_one_click: {
+        parameters: {
+            query: {
+                /** @description The signed token from the email's link. */
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unsubscribed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `invalid_token` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     health: {
         parameters: {
             query?: never;
@@ -1021,6 +1121,54 @@ export interface operations {
             };
             /** @description Signature missing or wrong */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    receive_resend_webhook: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique message ID */
+                "svix-id": string;
+                /** @description Unix seconds when it was sent */
+                "svix-timestamp": string;
+                /** @description Space-separated `v1,<base64>` signatures */
+                "svix-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Raw event payload */
+        requestBody: {
+            content: {
+                "application/json": string;
+            };
+        };
+        responses: {
+            /** @description Recorded, or ignored as irrelevant */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Signature missing, wrong or too old */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Resend webhooks aren't configured */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

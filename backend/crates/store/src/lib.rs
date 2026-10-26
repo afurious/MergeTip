@@ -4,6 +4,7 @@
 //! transaction) and `&mut PgConnection` when they need their own nested transaction.
 
 pub mod bot_comments;
+pub mod email_messages;
 mod error;
 pub mod feature_flags;
 pub mod github_events;

@@ -27,8 +27,9 @@ use mergetip_payer::{
 use mergetip_worker::{
     Runner, RunnerConfig,
     handlers::{
-        PayTipHandler, PostReplyHandler, ProcessEventHandler, ReconcilePaymentHandler,
-        ResolveHeldHandler, ResumeSenderTipsHandler, VerifyTipHandler,
+        NotifyPledgeHandler, PayTipHandler, PostReplyHandler, ProcessEventHandler,
+        ReconcilePaymentHandler, ResolveHeldHandler, ResumeSenderTipsHandler, SendDigestHandler,
+        VerifyTipHandler,
     },
 };
 use nostr_sdk::prelude::MockRelay;
@@ -221,6 +222,8 @@ impl System {
         .register(PayTipHandler(engine.clone()))
         .register(ResolveHeldHandler(engine.clone()))
         .register(ResumeSenderTipsHandler(engine.clone()))
+        .register(NotifyPledgeHandler(engine.clone()))
+        .register(SendDigestHandler(engine.clone()))
         .register(ReconcilePaymentHandler(engine));
         let shutdown = CancellationToken::new();
         let task = tokio::spawn(runner.run(shutdown.clone()));

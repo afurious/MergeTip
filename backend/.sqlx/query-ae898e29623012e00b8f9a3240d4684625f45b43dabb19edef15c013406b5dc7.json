@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT email_status FROM tips",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email_status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "email_status"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "ae898e29623012e00b8f9a3240d4684625f45b43dabb19edef15c013406b5dc7"
+}

@@ -536,6 +536,116 @@ pub async fn clear_claim_token(exec: impl PgExecutor<'_>, id: TipId) -> StoreRes
     Ok(())
 }
 
+/// The receiver's pledges an email could mention: every open one, plus expired ones whose final
+/// notice hasn't gone out. Oldest first.
+pub async fn notice_candidates(
+    exec: impl PgExecutor<'_>,
+    receiver: UserId,
+) -> StoreResult<Vec<Tip>> {
+    sqlx::query_as!(
+        TipRow,
+        r#"
+        SELECT * FROM tips
+        WHERE receiver_id = $1
+          AND (state = 'pledged'
+               OR (state = 'expired' AND expires_at IS NOT NULL
+                   AND (last_notified_at IS NULL OR last_notified_at < expires_at)))
+        ORDER BY created_at, command_index
+        "#,
+        receiver.as_uuid(),
+    )
+    .fetch_all(exec)
+    .await?
+    .into_iter()
+    .map(TryInto::try_into)
+    .collect()
+}
+
+/// Receivers with a pledge whose 7-day reminder is due (`now ≥ expires_at − reminder`) and not
+/// yet sent: no notice since the reminder point.
+pub async fn receivers_due_a_reminder(
+    exec: impl PgExecutor<'_>,
+    now: OffsetDateTime,
+    reminder: time::Duration,
+) -> StoreResult<Vec<UserId>> {
+    let ids = sqlx::query_scalar!(
+        r#"
+        SELECT DISTINCT receiver_id AS "receiver_id!" FROM tips
+        WHERE state = 'pledged' AND receiver_id IS NOT NULL AND expires_at IS NOT NULL
+          AND expires_at - $2::interval <= $1
+          AND (last_notified_at IS NULL OR last_notified_at < expires_at - $2::interval)
+        "#,
+        now,
+        reminder as _,
+    )
+    .fetch_all(exec)
+    .await?;
+    Ok(ids.into_iter().map(UserId::from_uuid).collect())
+}
+
+/// Records that these tips were covered by a notice at `at` (sent or deliberately skipped), and
+/// sets their email status.
+pub async fn mark_notified(
+    exec: impl PgExecutor<'_>,
+    ids: &[TipId],
+    at: OffsetDateTime,
+    email_status: &str,
+) -> StoreResult<()> {
+    let ids: Vec<Uuid> = ids.iter().map(TipId::as_uuid).collect();
+    sqlx::query!(
+        "UPDATE tips SET last_notified_at = $2, email_status = $3 WHERE id = ANY($1)",
+        &ids,
+        at,
+        email_status,
+    )
+    .execute(exec)
+    .await?;
+    Ok(())
+}
+
+/// Sets the email status of a tip no notice has covered yet (e.g. `pending` once an address is
+/// found). Returns `false`, changing nothing, if a digest already covered it.
+pub async fn set_email_status_before_notice(
+    exec: impl PgExecutor<'_>,
+    id: TipId,
+    email_status: &str,
+) -> StoreResult<bool> {
+    let result = sqlx::query!(
+        "UPDATE tips SET email_status = $2 WHERE id = $1 AND last_notified_at IS NULL",
+        id.as_uuid(),
+        email_status,
+    )
+    .execute(exec)
+    .await?;
+    Ok(result.rows_affected() == 1)
+}
+
+/// Applies a delivery event from the email provider. Only moves forward
+/// (`pending < sent < delivered < opened`); `bounced` and `failed` are final, so late or
+/// replayed webhooks can't undo a bounce. Returns how many tips changed.
+pub async fn advance_email_status(
+    exec: impl PgExecutor<'_>,
+    ids: &[Uuid],
+    status: &str,
+) -> StoreResult<u64> {
+    let result = sqlx::query!(
+        r#"
+        UPDATE tips SET email_status = $2
+        WHERE id = ANY($1) AND (
+            email_status IS NULL OR email_status IN ('none', 'pending')
+            OR ($2 = 'delivered' AND email_status = 'sent')
+            OR ($2 = 'opened' AND email_status IN ('sent', 'delivered'))
+            OR ($2 IN ('bounced', 'failed') AND email_status NOT IN ('bounced', 'failed'))
+        )
+        "#,
+        ids,
+        status,
+    )
+    .execute(exec)
+    .await?;
+    Ok(result.rows_affected())
+}
+
 /// Records the payment hash of the tip's current attempt (each attempt has a fresh invoice).
 /// Not a state change, so it doesn't go through [`transition`].
 pub async fn set_payment_hash(

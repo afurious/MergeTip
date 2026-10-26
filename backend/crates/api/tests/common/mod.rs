@@ -15,6 +15,8 @@ use sqlx::PgPool;
 pub const WEB: &str = "http://localhost:5173";
 pub const API: &str = "http://localhost:8080";
 pub const WEBHOOK_SECRET: &str = "test-secret";
+/// `whsec_` + base64("resend-test-secret").
+pub const RESEND_SECRET: &str = "whsec_cmVzZW5kLXRlc3Qtc2VjcmV0";
 pub const MASTER_KEY: &str = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
 
 pub fn env(github_base: &str) -> HashMap<&'static str, String> {
@@ -29,6 +31,7 @@ pub fn env(github_base: &str) -> HashMap<&'static str, String> {
         ("GITHUB_OAUTH_URL", github_base.to_owned()),
         ("GITHUB_API_URL", github_base.to_owned()),
         ("LIGHTNING_NETWORK", "regtest".to_owned()),
+        ("RESEND_WEBHOOK_SECRET", RESEND_SECRET.to_owned()),
     ])
 }
 

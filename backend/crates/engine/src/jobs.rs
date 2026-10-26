@@ -81,6 +81,26 @@ impl JobPayload for ResumeSenderTips {
     const KIND: &'static str = "resume_sender_tips";
 }
 
+/// Find an email for a new pledge's receiver and queue their digest.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NotifyPledge {
+    pub tip_id: TipId,
+}
+
+impl JobPayload for NotifyPledge {
+    const KIND: &'static str = "notify_pledge";
+}
+
+/// Email a receiver every pledge notice that is due, in one message (at most one a day).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SendDigest {
+    pub user_id: UserId,
+}
+
+impl JobPayload for SendDigest {
+    const KIND: &'static str = "send_digest";
+}
+
 /// Resolve the `held` (on-merge) tips of one pull request against its current state on GitHub:
 /// pay them if it merged, cancel them if it closed unmerged, leave them if it is still open.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

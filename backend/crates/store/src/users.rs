@@ -306,6 +306,46 @@ pub async fn update_settings(
     Ok(())
 }
 
+/// When the user was last emailed (digests wait 24 h after it).
+pub async fn last_email_sent_at(
+    exec: impl PgExecutor<'_>,
+    id: UserId,
+) -> StoreResult<Option<OffsetDateTime>> {
+    let at = sqlx::query_scalar!(
+        "SELECT last_email_sent_at FROM users WHERE id = $1",
+        id.as_uuid()
+    )
+    .fetch_one(exec)
+    .await?;
+    Ok(at)
+}
+
+pub async fn set_last_email_sent_at(
+    exec: impl PgExecutor<'_>,
+    id: UserId,
+    at: OffsetDateTime,
+) -> StoreResult<()> {
+    sqlx::query!(
+        "UPDATE users SET last_email_sent_at = $2 WHERE id = $1",
+        id.as_uuid(),
+        at,
+    )
+    .execute(exec)
+    .await?;
+    Ok(())
+}
+
+/// One-click unsubscribe. Returns whether the user exists.
+pub async fn opt_out_of_email(exec: impl PgExecutor<'_>, id: UserId) -> StoreResult<bool> {
+    let result = sqlx::query!(
+        "UPDATE users SET email_opt_out = true WHERE id = $1",
+        id.as_uuid()
+    )
+    .execute(exec)
+    .await?;
+    Ok(result.rows_affected() == 1)
+}
+
 pub async fn set_lightning_address(
     exec: impl PgExecutor<'_>,
     id: UserId,

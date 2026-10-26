@@ -10,9 +10,13 @@ use mergetip_core::{FixedClock, SystemClock};
 use mergetip_crypto::Keyring;
 use mergetip_engine::{
     Engine, EngineSettings, Payments,
-    jobs::{JobPayload, PayTip, PostReply, ProcessEvent, ResolveHeld, ResumeSenderTips, VerifyTip},
+    jobs::{
+        JobPayload, NotifyPledge, PayTip, PostReply, ProcessEvent, ResolveHeld, ResumeSenderTips,
+        SendDigest, VerifyTip,
+    },
 };
 use mergetip_github::{PullRequest, Review, testing::FakeGitHub};
+use mergetip_notify::testing::RecordingMailer;
 use mergetip_payer::{LnurlClient, Network, nwc::NwcConnector};
 use mergetip_store::{github_events, jobs};
 use serde_json::{Value, json};
@@ -26,12 +30,17 @@ pub struct Harness {
     pub pool: PgPool,
     pub github: Arc<FakeGitHub>,
     pub clock: Arc<FixedClock>,
+    pub mailer: Arc<RecordingMailer>,
     pub engine: Engine,
     deliveries: u32,
 }
 
 impl Harness {
     pub fn new(pool: PgPool) -> Self {
+        Self::with_settings(pool, EngineSettings::new("https://mergetip.dev", false))
+    }
+
+    pub fn with_settings(pool: PgPool, settings: EngineSettings) -> Self {
         let github = Arc::new(FakeGitHub::new());
         github.add_user(FakeGitHub::account(10, "maintainer"));
         github.add_user(FakeGitHub::account(11, "reviewer"));
@@ -58,11 +67,12 @@ impl Harness {
             );
         }
         let clock = Arc::new(FixedClock::new(OffsetDateTime::now_utc()));
+        let mailer = Arc::new(RecordingMailer::new());
         let engine = Engine::new(
             pool.clone(),
             github.clone(),
             clock.clone(),
-            EngineSettings::new("https://mergetip.dev", false),
+            settings,
             Payments {
                 receivers: Arc::new(
                     LnurlClient::new(Network::Regtest, true, Arc::new(SystemClock)).unwrap(),
@@ -70,11 +80,13 @@ impl Harness {
                 wallets: Arc::new(NwcConnector),
                 keyring: Arc::new(Keyring::from_hex(KEY, None).unwrap()),
             },
-        );
+        )
+        .with_mailer(mailer.clone());
         Self {
             pool,
             github,
             clock,
+            mailer,
             engine,
             deliveries: 0,
         }
@@ -197,6 +209,8 @@ impl Harness {
             PostReply::KIND,
             ResolveHeld::KIND,
             ResumeSenderTips::KIND,
+            NotifyPledge::KIND,
+            SendDigest::KIND,
         ])
         .await;
     }
@@ -237,6 +251,16 @@ impl Harness {
                         .resume_sender_tips(ResumeSenderTips::decode(&job.payload).unwrap().user_id)
                         .await
                 }
+                NotifyPledge::KIND => {
+                    self.engine
+                        .notify_pledge(NotifyPledge::decode(&job.payload).unwrap().tip_id)
+                        .await
+                }
+                SendDigest::KIND => {
+                    self.engine
+                        .send_digest(SendDigest::decode(&job.payload).unwrap().user_id)
+                        .await
+                }
                 other => panic!("unexpected job kind {other}"),
             };
             result.unwrap_or_else(|err| panic!("{} failed: {err}", job.kind));
@@ -259,6 +283,18 @@ impl Harness {
 
     pub async fn states(&self) -> Vec<String> {
         self.tips().await.into_iter().map(|t| t.1).collect()
+    }
+
+    /// Jobs are scheduled on the test clock but claimed on the database clock: after moving the
+    /// clock forward, make everything scheduled up to it runnable now.
+    pub async fn release_jobs_due_by_clock(&self) {
+        sqlx::query!(
+            "UPDATE jobs SET run_at = now() WHERE run_at <= $1",
+            self.clock_now()
+        )
+        .execute(&self.pool)
+        .await
+        .unwrap();
     }
 
     pub async fn queued(&self, kind: &str) -> i64 {

@@ -30,6 +30,8 @@ pub struct ApiConfig {
     pub lightning_network: mergetip_payer::Network,
     /// How confirmation codes are emailed.
     pub mailer: mergetip_notify::MailerConfig,
+    /// Svix secret (`whsec_…`) Resend signs delivery events with; unset disables that webhook.
+    pub resend_webhook_secret: Option<Redacted<String>>,
 }
 
 impl ApiConfig {
@@ -49,6 +51,7 @@ impl ApiConfig {
         Ok(Self {
             app_env,
             mailer: mergetip_runtime::config::mailer_config(env, app_env)?,
+            resend_webhook_secret: env.optional("RESEND_WEBHOOK_SECRET").map(Redacted::new),
             addr: env.parse_or("API_ADDR", SocketAddr::from(([0, 0, 0, 0], 8080)))?,
             web_origin: parse_origin("PUBLIC_BASE_URL", &env.required("PUBLIC_BASE_URL")?)?,
             database_url: Redacted::new(env.required("DATABASE_URL")?),

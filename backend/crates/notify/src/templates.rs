@@ -23,6 +23,8 @@ pub enum Notice {
     New,
     Reminder,
     Expired,
+    /// Still open with nothing new to say; listed so a digest shows everything waiting.
+    Open,
 }
 
 impl Notice {
@@ -31,6 +33,7 @@ impl Notice {
             Self::New => format!("new, claim by {}", pledge.expires_on),
             Self::Reminder => format!("expires on {}", pledge.expires_on),
             Self::Expired => "expired unclaimed; nothing was charged".into(),
+            Self::Open => format!("claim by {}", pledge.expires_on),
         }
     }
 }

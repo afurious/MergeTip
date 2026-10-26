@@ -2132,6 +2132,7 @@ dependencies = [
  "mergetip-core",
  "mergetip-crypto",
  "mergetip-github",
+ "mergetip-notify",
  "mergetip-parser",
  "mergetip-payer",
  "mergetip-store",

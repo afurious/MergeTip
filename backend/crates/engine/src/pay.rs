@@ -28,7 +28,7 @@ use time::{OffsetDateTime, Time, UtcOffset};
 use crate::{
     Engine, EngineError,
     comments::{enqueue_reaction, enqueue_tip_reply},
-    jobs::{self, PayTip, ReconcilePayment, TipMessage},
+    jobs::{self, NotifyPledge, PayTip, ReconcilePayment, TipMessage},
 };
 
 /// How long the sender's wallet gets to pay before the outcome counts as unknown.
@@ -443,6 +443,7 @@ impl Engine {
             TipMessage::Pledged,
         )
         .await?;
+        jobs::enqueue(&mut tx, &NotifyPledge { tip_id: tip.id }).await?;
         tx.commit().await?;
         Ok(())
     }

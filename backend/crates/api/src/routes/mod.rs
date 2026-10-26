@@ -3,6 +3,7 @@
 pub(crate) mod auth;
 pub(crate) mod claims;
 pub(crate) mod confirmations;
+pub(crate) mod email;
 pub(crate) mod health;
 pub(crate) mod me;
 pub(crate) mod settings;
@@ -79,7 +80,12 @@ pub fn router(state: AppState) -> Router {
             "/confirmations/{tip_id}/otp",
             post(confirmations::send_code),
         )
-        .route("/webhooks/github", post(webhooks::github));
+        .route(
+            "/email/unsubscribe",
+            get(email::unsubscribe_link).post(email::unsubscribe_one_click),
+        )
+        .route("/webhooks/github", post(webhooks::github))
+        .route("/webhooks/resend", post(webhooks::resend));
 
     // Layers run outermost-last. CORS wraps every layer that can answer on its own (body limit,
     // timeout) and the error normaliser, so even those responses reach the browser readable and

@@ -14,6 +14,7 @@ use crate::{
         auth::{self, ExtensionToken},
         claims::{self, ClaimRequest},
         confirmations::{self, ConfirmRequest},
+        email,
         health::{self, Health},
         me::{self, Caps, Me, WalletStatus},
         settings::{self, AddressRequest, SettingsRequest, WalletRequest},
@@ -48,6 +49,9 @@ use crate::{
         confirmations::send_code,
         confirmations::confirm_tip,
         confirmations::cancel_tip,
+        email::unsubscribe_link,
+        email::unsubscribe_one_click,
+        webhooks::resend,
     ),
     components(schemas(
         ErrorBody,
@@ -76,6 +80,7 @@ use crate::{
         (name = "me", description = "The signed-in user's account and settings"),
         (name = "claims", description = "Claiming pledged tips"),
         (name = "confirmations", description = "Confirming high-value tips"),
+        (name = "email", description = "Email preferences reachable from emails"),
     )
 )]
 pub struct ApiDoc;

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT tip_ids FROM email_messages WHERE provider_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "tip_ids",
+        "type_info": "UuidArray",
+        "origin": {
+          "Table": {
+            "table": "email_messages",
+            "name": "tip_ids"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2bac0b1372dbcafe9db697222049edb82e986e0a29cb3e3d4d8a56da5e9ad23b"
+}

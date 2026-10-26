@@ -11,6 +11,7 @@ mod events;
 mod expiry;
 mod holds;
 pub mod jobs;
+mod notices;
 mod pay;
 mod replies;
 mod verify;
@@ -21,11 +22,13 @@ use std::sync::Arc;
 use mergetip_core::Clock;
 use mergetip_crypto::Keyring;
 use mergetip_github::GitHubApi;
+use mergetip_notify::{DisabledMailer, Mailer};
 use mergetip_payer::{ReceiverEndpoint, WalletConnector};
 use mergetip_store::PgPool;
 
 pub use error::EngineError;
 pub use expiry::{EXPIRY_BATCH, ExpiryReport};
+pub use notices::REMINDER_BEFORE_EXPIRY;
 pub use pay::{MAX_PAYMENT_ATTEMPTS, PAY_TIMEOUT, PLEDGE_WINDOW, ReconcileOutcome};
 pub use verify::{Decision, decide};
 
@@ -43,14 +46,21 @@ pub struct EngineSettings {
     pub stub_payer: bool,
     /// How long the sender's wallet gets to pay before the outcome counts as unknown.
     pub pay_timeout: std::time::Duration,
+    /// This API's public origin, for unsubscribe links in emails.
+    pub api_base_url: String,
+    /// Production picks the privacy-conservative defaults (no commit emails unless enabled).
+    pub production: bool,
 }
 
 impl EngineSettings {
     pub fn new(web_base_url: impl Into<String>, stub_payer: bool) -> Self {
+        let web_base_url = web_base_url.into();
         Self {
-            web_base_url: web_base_url.into(),
+            api_base_url: web_base_url.clone(),
+            web_base_url,
             stub_payer,
             pay_timeout: pay::PAY_TIMEOUT,
+            production: false,
         }
     }
 }
@@ -69,6 +79,7 @@ pub struct Engine {
     clock: Arc<dyn Clock>,
     settings: EngineSettings,
     payments: Payments,
+    mailer: Arc<dyn Mailer>,
 }
 
 impl std::fmt::Debug for Engine {
@@ -93,7 +104,14 @@ impl Engine {
             clock,
             settings,
             payments,
+            mailer: Arc::new(DisabledMailer),
         }
+    }
+
+    /// Sends pledge emails through `mailer`. Without it, notices are GitHub mentions only.
+    pub fn with_mailer(mut self, mailer: Arc<dyn Mailer>) -> Self {
+        self.mailer = mailer;
+        self
     }
 
     pub fn settings(&self) -> &EngineSettings {

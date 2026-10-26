@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE tips SET email_status = $2\n        WHERE id = ANY($1) AND (\n            email_status IS NULL OR email_status IN ('none', 'pending')\n            OR ($2 = 'delivered' AND email_status = 'sent')\n            OR ($2 = 'opened' AND email_status IN ('sent', 'delivered'))\n            OR ($2 IN ('bounced', 'failed') AND email_status NOT IN ('bounced', 'failed'))\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c17bd359a3d264e3895818a779f73151d07199b651d0b9309945f2af6441af6a"
+}
