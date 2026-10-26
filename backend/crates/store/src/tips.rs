@@ -7,6 +7,7 @@
 use mergetip_core::{
     GithubInstallationId, InstallationId, Sats, ThreadRef, TipId, TipKind, TipState, UserId,
 };
+use rust_decimal::Decimal;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use sqlx::{Acquire, PgConnection, PgExecutor};
@@ -69,6 +70,20 @@ pub struct Tip {
     pub last_notified_at: Option<OffsetDateTime>,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
+    /// Set for tips paid out in local currency (RFC 0004).
+    pub fiat: FiatDetails,
+}
+
+/// What a fiat tip was quoted and paid out at. All `None` for Lightning tips.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct FiatDetails {
+    pub currency: Option<String>,
+    pub amount: Option<Decimal>,
+    pub fx_rate: Option<Decimal>,
+    pub fees: Option<Decimal>,
+    pub quote_id: Option<String>,
+    pub payout_id: Option<String>,
+    pub provider_status: Option<String>,
 }
 
 /// One row of the audit log.
@@ -116,6 +131,13 @@ struct TipRow {
     last_notified_at: Option<OffsetDateTime>,
     created_at: OffsetDateTime,
     updated_at: OffsetDateTime,
+    fiat_currency: Option<String>,
+    fiat_amount: Option<Decimal>,
+    fx_rate: Option<Decimal>,
+    fees: Option<Decimal>,
+    provider_quote_id: Option<String>,
+    provider_payout_id: Option<String>,
+    provider_status: Option<String>,
 }
 
 impl TryFrom<TipRow> for Tip {
@@ -158,6 +180,15 @@ impl TryFrom<TipRow> for Tip {
             last_notified_at: row.last_notified_at,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            fiat: FiatDetails {
+                currency: row.fiat_currency,
+                amount: row.fiat_amount,
+                fx_rate: row.fx_rate,
+                fees: row.fees,
+                quote_id: row.provider_quote_id,
+                payout_id: row.provider_payout_id,
+                provider_status: row.provider_status,
+            },
         })
     }
 }
@@ -724,6 +755,62 @@ pub async fn lock_open_by_sender(conn: &mut PgConnection, sender: UserId) -> Sto
     .into_iter()
     .map(TryInto::try_into)
     .collect()
+}
+
+/// Records a fiat quote and payout on the tip (not a state change).
+pub async fn set_fiat_details(
+    exec: impl PgExecutor<'_>,
+    id: TipId,
+    fiat: &FiatDetails,
+) -> StoreResult<()> {
+    sqlx::query!(
+        r#"
+        UPDATE tips SET
+            fiat_currency = COALESCE($2, fiat_currency),
+            fiat_amount = COALESCE($3, fiat_amount),
+            fx_rate = COALESCE($4, fx_rate),
+            fees = COALESCE($5, fees),
+            provider_quote_id = COALESCE($6, provider_quote_id),
+            provider_payout_id = COALESCE($7, provider_payout_id),
+            provider_status = COALESCE($8, provider_status)
+        WHERE id = $1
+        "#,
+        id.as_uuid(),
+        fiat.currency,
+        fiat.amount,
+        fiat.fx_rate,
+        fiat.fees,
+        fiat.quote_id,
+        fiat.payout_id,
+        fiat.provider_status,
+    )
+    .execute(exec)
+    .await?;
+    Ok(())
+}
+
+/// The tip a provider payout belongs to, locked until the caller's transaction ends.
+pub async fn lock_by_payout_id(
+    conn: &mut PgConnection,
+    payout_id: &str,
+) -> StoreResult<Option<Tip>> {
+    sqlx::query_as!(
+        TipRow,
+        "SELECT * FROM tips WHERE provider_payout_id = $1 FOR UPDATE",
+        payout_id
+    )
+    .fetch_optional(conn)
+    .await?
+    .map(TryInto::try_into)
+    .transpose()
+}
+
+/// Tips per state, for the `tips_in_state` gauge.
+pub async fn count_by_state(exec: impl PgExecutor<'_>) -> StoreResult<Vec<(String, i64)>> {
+    let rows = sqlx::query!(r#"SELECT state, count(*) AS "n!" FROM tips GROUP BY state"#)
+        .fetch_all(exec)
+        .await?;
+    Ok(rows.into_iter().map(|r| (r.state, r.n)).collect())
 }
 
 /// Records the payment hash of the tip's current attempt (each attempt has a fresh invoice).

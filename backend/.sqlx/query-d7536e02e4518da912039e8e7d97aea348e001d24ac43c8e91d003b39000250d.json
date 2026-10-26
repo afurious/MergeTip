@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE tips SET\n            fiat_currency = COALESCE($2, fiat_currency),\n            fiat_amount = COALESCE($3, fiat_amount),\n            fx_rate = COALESCE($4, fx_rate),\n            fees = COALESCE($5, fees),\n            provider_quote_id = COALESCE($6, provider_quote_id),\n            provider_payout_id = COALESCE($7, provider_payout_id),\n            provider_status = COALESCE($8, provider_status)\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Numeric",
+        "Numeric",
+        "Numeric",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d7536e02e4518da912039e8e7d97aea348e001d24ac43c8e91d003b39000250d"
+}

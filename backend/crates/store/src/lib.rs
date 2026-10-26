@@ -3,6 +3,7 @@
 //! Functions take `impl PgExecutor` when they run a single statement (pass a pool or a
 //! transaction) and `&mut PgConnection` when they need their own nested transaction.
 
+pub mod bitnob_events;
 pub mod bot_comments;
 pub mod email_messages;
 mod error;
@@ -12,6 +13,7 @@ pub mod installations;
 pub mod jobs;
 pub mod otp_codes;
 pub mod payment_attempts;
+pub mod payout_methods;
 pub mod sent_replies;
 pub mod sessions;
 pub mod tips;
