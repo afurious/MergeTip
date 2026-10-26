@@ -26,6 +26,7 @@ nostr-sdk = { workspace = true, features = ["local-relay"] }
 serde_json.workspace = true
 sha2.workspace = true
 sqlx.workspace = true
+time.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tower.workspace = true

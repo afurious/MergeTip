@@ -57,7 +57,7 @@ Ticked when the task's commit lands. Milestones are defined in the backend miles
 - [x] 4.6 Pledge notifications
 - [x] 4.7 Expiry worker
 - [x] 4.8 Remaining endpoints
-- [ ] 4.9 E2E journeys
+- [x] 4.9 E2E journeys
 - [ ] Handover
 
 ## M5: Fiat payouts and hardening
