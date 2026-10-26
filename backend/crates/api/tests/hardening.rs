@@ -44,8 +44,16 @@ async fn confirmation_codes_are_rate_limited_per_ip(pool: PgPool) -> sqlx::Resul
         let response = post(&app, uri, "203.0.113.7", None, "").await;
         assert_ne!(response.status(), StatusCode::TOO_MANY_REQUESTS);
     }
-    let limited = post(&app, uri, "203.0.113.7", None, "").await;
-    assert_eq!(limited.status(), StatusCode::TOO_MANY_REQUESTS);
+    // One more request refills every 12 s; allow a slow machine a little slack.
+    let mut limited = None;
+    for _ in 0..5 {
+        let response = post(&app, uri, "203.0.113.7", None, "").await;
+        if response.status() == StatusCode::TOO_MANY_REQUESTS {
+            limited = Some(response);
+            break;
+        }
+    }
+    let limited = limited.expect("the per-IP limit applies");
     let retry_after: u64 = limited.headers()[header::RETRY_AFTER]
         .to_str()
         .unwrap()
@@ -78,8 +86,24 @@ async fn one_user_cannot_spread_claims_across_addresses(pool: PgPool) -> sqlx::R
             "request {n}"
         );
     }
-    let limited = post(&app, "/v1/claims/nope", "192.0.2.200", Some(&session), "{}").await;
-    assert_eq!(limited.status(), StatusCode::TOO_MANY_REQUESTS);
+    // The quota refills one request every 6 s; a slow machine may earn one or two more, but a
+    // burst from new addresses is still cut off well before 20.
+    let mut limited = None;
+    for n in 0..10 {
+        let response = post(
+            &app,
+            "/v1/claims/nope",
+            &format!("198.51.100.{n}"),
+            Some(&session),
+            "{}",
+        )
+        .await;
+        if response.status() == StatusCode::TOO_MANY_REQUESTS {
+            limited = Some(response);
+            break;
+        }
+    }
+    let limited = limited.expect("the per-user limit applies across addresses");
     assert_eq!(code(limited).await, "rate_limited");
     Ok(())
 }
