@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT last_notified_at, expires_at, email_status FROM tips WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "last_notified_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "last_notified_at"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "expires_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "expires_at"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "email_status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "email_status"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "123e83eaea379eca8bbe91fe2275294eaa8c7af24df69449996a943caf4394dc"
+}

@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT email_opt_out FROM users WHERE github_id = 42",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email_opt_out",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "email_opt_out"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cebf4bdefd06b6e11c9b51628e83390c9f3cc82e1eee193207a776f406d9b0dd"
+}

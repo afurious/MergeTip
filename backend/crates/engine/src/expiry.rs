@@ -72,6 +72,7 @@ impl Engine {
         tx.commit().await?;
 
         report.reminders = self.schedule_reminders().await?;
+        report.reminders += self.sweep_unsent_notices().await?;
         if report != ExpiryReport::default() {
             tracing::info!(
                 cancelled = report.cancelled,

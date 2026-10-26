@@ -24,6 +24,20 @@ use crate::{
 
 /// Reminders go out this long before a pledge expires (day 23 of 30).
 pub const REMINDER_BEFORE_EXPIRY: Duration = Duration::days(7);
+/// Passes of one digest job over pledges that arrive while it runs.
+const MAX_DIGEST_PASSES: usize = 5;
+/// How long a pledge may wait for its first notice before the expiry job re-queues it.
+const UNSENT_GRACE: Duration = Duration::minutes(10);
+
+/// What one pass of a digest did.
+enum DigestPass {
+    NothingDue,
+    /// Due notices were marked without an email (no address, opt-out, refused).
+    Skipped,
+    /// An email went out covering these tips.
+    Sent(Vec<TipId>),
+}
+
 /// At most one email per receiver in this window.
 const DIGEST_INTERVAL: Duration = Duration::hours(24);
 
@@ -70,9 +84,13 @@ impl Engine {
             return Ok(());
         }
 
+        // Look GitHub up only when it could find something better than what's stored: nothing
+        // stored, or only a commit email (the public profile email outranks it).
         let secrets = users::secrets(&self.pool, receiver.id).await?;
-        if secrets.email_source.as_deref() != Some(EmailSource::Verified.as_str())
-            && let Some((email, source)) = self.find_email(&tip, &receiver).await?
+        let stored = secrets.email_source.as_deref();
+        let commit_ok = stored.is_none();
+        if (stored.is_none() || stored == Some(EmailSource::Commit.as_str()))
+            && let Some((email, source)) = self.find_email(&tip, &receiver, commit_ok).await?
         {
             let sealed = self
                 .payments
@@ -85,10 +103,11 @@ impl Engine {
             users::set_email(&self.pool, receiver.id, &sealed, source).await?;
         }
 
-        let has_email = users::secrets(&self.pool, receiver.id)
-            .await?
-            .email_ciphertext
-            .is_some();
+        let has_email = secrets.email_ciphertext.is_some()
+            || users::secrets(&self.pool, receiver.id)
+                .await?
+                .email_ciphertext
+                .is_some();
         // A digest for an earlier pledge may already have covered this one.
         let mut tx = self.pool.begin().await?;
         let status = if has_email { "pending" } else { "none" };
@@ -105,6 +124,7 @@ impl Engine {
         &self,
         tip: &Tip,
         receiver: &User,
+        try_commits: bool,
     ) -> Result<Option<(String, EmailSource)>, EngineError> {
         let installation = installations::get(&self.pool, tip.installation_id)
             .await?
@@ -123,7 +143,7 @@ impl Engine {
             Err(_) => {}
         }
 
-        if !tip.thread.is_pr || !self.commit_emails_allowed().await? {
+        if !try_commits || !tip.thread.is_pr || !self.commit_emails_allowed().await? {
             return Ok(None);
         }
         let repo = RepoName::new(&tip.thread.owner, &tip.thread.repo)?;
@@ -172,6 +192,32 @@ impl Engine {
     /// address, no provider or an opt-out, the due tips are marked as handled (email status
     /// `none`) so they aren't picked up again.
     pub async fn send_digest(&self, user_id: UserId) -> Result<(), EngineError> {
+        // Pledges can arrive while this runs, and the job queue won't take a second digest for
+        // today while this one is live. When nothing was sent (no address, opt-out, refused),
+        // marking those too is the whole job, so go round again until nothing is due.
+        for _ in 0..MAX_DIGEST_PASSES {
+            match self.send_digest_once(user_id).await? {
+                DigestPass::NothingDue => return Ok(()),
+                DigestPass::Skipped => {}
+                DigestPass::Sent(ids) => {
+                    // Something that arrived during the send waits for tomorrow's digest.
+                    let now = self.clock.now();
+                    let late = tips::notice_candidates(&self.pool, user_id)
+                        .await?
+                        .iter()
+                        .any(|tip| !ids.contains(&tip.id) && notice_for(tip, now).is_due());
+                    if late {
+                        let mut conn = self.pool.acquire().await?;
+                        enqueue_digest(&mut conn, user_id, now).await?;
+                    }
+                    return Ok(());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn send_digest_once(&self, user_id: UserId) -> Result<DigestPass, EngineError> {
         let now = self.clock.now();
         let user = users::get(&self.pool, user_id).await?;
         let candidates = tips::notice_candidates(&self.pool, user_id).await?;
@@ -180,7 +226,7 @@ impl Engine {
             .map(|tip| (notice_for(tip, now), tip))
             .collect();
         if !notices.iter().any(|(notice, _)| notice.is_due()) {
-            return Ok(());
+            return Ok(DigestPass::NothingDue);
         }
         let ids: Vec<TipId> = candidates.iter().map(|t| t.id).collect();
 
@@ -191,7 +237,7 @@ impl Engine {
         };
         let Some(to) = to else {
             tips::mark_notified(&self.pool, &ids, now, "none").await?;
-            return Ok(());
+            return Ok(DigestPass::Skipped);
         };
 
         let mut lines = Vec::with_capacity(notices.len());
@@ -234,33 +280,36 @@ impl Engine {
                 tx.commit().await?;
                 metrics::counter!("emails_total", "status" => "sent").increment(1);
                 tracing::info!(%user_id, tag, tips = ids.len(), "pledge email sent");
+                Ok(DigestPass::Sent(ids))
             }
-            Err(err) if err.is_retryable() => {
-                return Err(EngineError::Retry {
-                    reason: err.to_string(),
-                    after: std::time::Duration::from_secs(300),
-                });
-            }
+            Err(err) if err.is_retryable() => Err(EngineError::Retry {
+                reason: err.to_string(),
+                after: std::time::Duration::from_secs(300),
+            }),
             Err(MailError::NotConfigured) => {
                 tips::mark_notified(&self.pool, &ids, now, "none").await?;
+                Ok(DigestPass::Skipped)
             }
             Err(err) => {
                 tracing::warn!(%user_id, error = %err, "pledge email refused");
                 metrics::counter!("emails_total", "status" => "failed").increment(1);
                 tips::mark_notified(&self.pool, &ids, now, "failed").await?;
+                Ok(DigestPass::Skipped)
             }
         }
+    }
 
-        // A pledge that arrived while this ran waits for tomorrow's digest.
-        let late = tips::notice_candidates(&self.pool, user_id)
-            .await?
-            .iter()
-            .any(|tip| !ids.contains(&tip.id) && notice_for(tip, now).is_due());
-        if late {
+    /// Queues a digest for receivers whose new pledge was never covered: its `notify_pledge`
+    /// may have been dropped by the dedupe key of a digest that was running at the time. Run by
+    /// the expiry job; harmless when nothing is waiting.
+    pub async fn sweep_unsent_notices(&self) -> Result<usize, EngineError> {
+        let now = self.clock.now();
+        let waiting = tips::receivers_with_unsent_notices(&self.pool, now - UNSENT_GRACE).await?;
+        for user in &waiting {
             let mut conn = self.pool.acquire().await?;
-            enqueue_digest(&mut conn, user_id, now).await?;
+            enqueue_digest(&mut conn, *user, now).await?;
         }
-        Ok(())
+        Ok(waiting.len())
     }
 
     async fn email_of(&self, user_id: UserId) -> Result<Option<String>, EngineError> {

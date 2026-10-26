@@ -621,6 +621,25 @@ pub async fn receivers_due_a_reminder(
     Ok(ids.into_iter().map(UserId::from_uuid).collect())
 }
 
+/// Receivers with a pledge that found an address (`email_status = pending`) but was never
+/// covered by a notice, and has waited since before `cutoff`.
+pub async fn receivers_with_unsent_notices(
+    exec: impl PgExecutor<'_>,
+    cutoff: OffsetDateTime,
+) -> StoreResult<Vec<UserId>> {
+    let ids = sqlx::query_scalar!(
+        r#"
+        SELECT DISTINCT receiver_id AS "receiver_id!" FROM tips
+        WHERE state = 'pledged' AND receiver_id IS NOT NULL AND last_notified_at IS NULL
+          AND email_status = 'pending' AND updated_at < $1
+        "#,
+        cutoff,
+    )
+    .fetch_all(exec)
+    .await?;
+    Ok(ids.into_iter().map(UserId::from_uuid).collect())
+}
+
 /// Records that these tips were covered by a notice at `at` (sent or deliberately skipped), and
 /// sets their email status.
 pub async fn mark_notified(

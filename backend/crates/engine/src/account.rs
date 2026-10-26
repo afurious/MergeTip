@@ -54,6 +54,17 @@ pub async fn close_sender_tips(
                 .await
                 {
                     Ok(expired) => {
+                        // Its deadline is still ahead, so without this the digest would keep
+                        // counting it as an expiry notice that hasn't gone out.
+                        tips::mark_notified(
+                            &mut *conn,
+                            &[expired.id],
+                            expired
+                                .expires_at
+                                .unwrap_or_else(time::OffsetDateTime::now_utc),
+                            "none",
+                        )
+                        .await?;
                         let installation =
                             installations::get(&mut *conn, expired.installation_id).await?;
                         enqueue_tip_reply(

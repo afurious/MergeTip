@@ -398,6 +398,15 @@ async fn deleting_the_account_erases_secrets_and_closes_waiting_tips(
     assert_eq!(state(waiting).await, "cancelled");
     assert_eq!(state(held).await, "cancelled");
     assert_eq!(state(pledged).await, "expired");
+    // M4 review: its deadline is still ahead, so it must not linger as an unsent expiry notice.
+    let notice = sqlx::query!(
+        "SELECT last_notified_at, expires_at, email_status FROM tips WHERE id = $1",
+        pledged.as_uuid()
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(notice.last_notified_at >= notice.expires_at);
+    assert_eq!(notice.email_status.as_deref(), Some("none"));
     assert_eq!(
         state(paying).await,
         "paying",
