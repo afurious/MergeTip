@@ -481,3 +481,47 @@ async fn loosening_protections_needs_a_recent_web_sign_in(pool: PgPool) -> sqlx:
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     Ok(())
 }
+
+/// M3 review: sessions slide in the database; the browser's cookie must slide with them.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn using_a_session_renews_its_cookie(pool: PgPool) -> sqlx::Result<()> {
+    let app = fake_app(pool.clone());
+    let session = session_for(&pool, 10, "maintainer").await;
+    let get = |cookie: String, uri: &'static str| {
+        let app = app.clone();
+        async move {
+            let request = axum::http::Request::get(uri)
+                .header("cookie", format!("mt_session={cookie}"))
+                .body(axum::body::Body::empty())
+                .unwrap();
+            tower::ServiceExt::oneshot(app, request).await.unwrap()
+        }
+    };
+    let set_cookies = |response: &axum::response::Response| -> Vec<String> {
+        response
+            .headers()
+            .get_all("set-cookie")
+            .iter()
+            .map(|v| v.to_str().unwrap().to_owned())
+            .collect()
+    };
+
+    let me = get(session.clone(), "/v1/me").await;
+    assert_eq!(me.status(), StatusCode::OK);
+    let renewed = set_cookies(&me);
+    assert_eq!(renewed.len(), 1, "{renewed:?}");
+    assert!(renewed[0].starts_with(&format!("mt_session={session};")));
+    assert!(renewed[0].contains("Max-Age=2592000") && renewed[0].contains("HttpOnly"));
+
+    // A cookie that doesn't authenticate is never echoed back.
+    let bogus = get("not-a-session".into(), "/v1/me").await;
+    assert_eq!(bogus.status(), StatusCode::UNAUTHORIZED);
+    assert!(set_cookies(&bogus).is_empty());
+    let public = get("not-a-session".into(), "/v1/health").await;
+    assert!(set_cookies(&public).is_empty());
+
+    // Signing out still only clears it.
+    let (status, _) = send(&app, "POST", "/v1/auth/logout", Some(&session), None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    Ok(())
+}

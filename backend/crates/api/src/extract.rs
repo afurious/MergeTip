@@ -9,9 +9,16 @@
 //! top-level form POST through. Bearer tokens are never attached automatically, so they need no
 //! such check.
 
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+
 use axum::{
-    extract::FromRequestParts,
+    extract::{FromRequestParts, Request, State},
     http::{Method, StatusCode, header, request::Parts},
+    middleware::Next,
+    response::Response,
 };
 use mergetip_crypto::hash_token;
 use mergetip_store::{
@@ -54,6 +61,47 @@ impl FromRequestParts<AppState> for SessionUser {
     }
 }
 
+/// Set on the request by [`slide_session_cookie`]; the extractor flips it when the session
+/// cookie authenticated the request.
+#[derive(Clone, Default)]
+pub(crate) struct SessionSeen(Arc<AtomicBool>);
+
+/// Re-issues the session cookie (another 30 days) on responses to requests it authenticated, so
+/// the browser's copy slides with the database expiry instead of lapsing 30 days after sign-in.
+/// Responses that set the cookie themselves (sign-in, sign-out) are left alone.
+pub async fn slide_session_cookie(
+    State(state): State<AppState>,
+    mut request: Request,
+    next: Next,
+) -> Response {
+    let seen = SessionSeen::default();
+    let token = cookies::get(request.headers(), cookies::SESSION).map(str::to_owned);
+    request.extensions_mut().insert(seen.clone());
+    let mut response = next.run(request).await;
+    let already_set = response
+        .headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .any(|v| v.as_bytes().starts_with(cookies::SESSION.as_bytes()));
+    if let Some(token) = token
+        && seen.0.load(Ordering::Relaxed)
+        && !already_set
+        && !response.status().is_server_error()
+    {
+        response.headers_mut().append(
+            header::SET_COOKIE,
+            cookies::set(
+                cookies::SESSION,
+                &token,
+                "/",
+                WEB_SESSION_TTL.whole_seconds(),
+                state.config().secure_cookies(),
+            ),
+        );
+    }
+    response
+}
+
 async fn cookie_session(parts: &Parts, state: &AppState) -> Result<AuthUser, ApiError> {
     let token =
         cookies::get(&parts.headers, cookies::SESSION).ok_or_else(ApiError::unauthenticated)?;
@@ -64,7 +112,11 @@ async fn cookie_session(parts: &Parts, state: &AppState) -> Result<AuthUser, Api
             "This request must come from the MergeTip web app.",
         ));
     }
-    authenticate(state, token, SessionKind::Web).await
+    let auth = authenticate(state, token, SessionKind::Web).await?;
+    if let Some(seen) = parts.extensions.get::<SessionSeen>() {
+        seen.0.store(true, Ordering::Relaxed);
+    }
+    Ok(auth)
 }
 
 async fn authenticate(

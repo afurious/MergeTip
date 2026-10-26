@@ -144,6 +144,10 @@ pub fn router(state: AppState) -> Router {
             crate::hardening::rate_limit,
         ))
         .layer(middleware::map_response(json_error_body))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            crate::extract::slide_session_cookie,
+        ))
         .layer(middleware::from_fn(crate::hardening::security_headers))
         .layer(cors)
         .layer(PropagateRequestIdLayer::new(REQUEST_ID))
