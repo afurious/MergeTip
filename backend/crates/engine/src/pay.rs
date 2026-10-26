@@ -376,7 +376,8 @@ impl Engine {
         if fiat {
             tx.commit().await?;
             tracing::info!(tip_id = %tip.id, sats = tip.amount.get(), "fiat payout funded");
-            return Ok(());
+            // Bitnob may already have confirmed the payout before the wallet answered.
+            return self.apply_recorded_payout_status(tip.id).await;
         }
         let installation = installations::get(&mut *tx, tip.installation_id).await?;
         enqueue_tip_reply(

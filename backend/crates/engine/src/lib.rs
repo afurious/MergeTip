@@ -15,6 +15,7 @@ mod holds;
 pub mod jobs;
 mod notices;
 mod pay;
+mod payouts;
 mod replies;
 mod verify;
 mod waits;

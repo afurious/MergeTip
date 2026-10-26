@@ -183,3 +183,63 @@ pub async fn resend(
     tracing::info!(event = %event.kind, changed, "email delivery event");
     Ok(StatusCode::OK)
 }
+
+/// Receive a Bitnob payout event (RFC 0004): check the signature over the raw body, store it once
+/// per `event_id`, and queue it. Processing happens in the worker.
+#[utoipa::path(
+    post,
+    path = "/v1/webhooks/bitnob",
+    operation_id = "receive_bitnob_webhook",
+    tag = "webhooks",
+    params(("x-bitnob-signature" = String, Header, description = "HMAC-SHA512 of the raw body")),
+    request_body(content = String, content_type = "application/json", description = "Raw event payload"),
+    responses(
+        (status = 200, description = "Stored for processing (or already stored)"),
+        (status = 400, description = "No event ID or not JSON", body = crate::error::ErrorBody),
+        (status = 401, description = "Signature missing or wrong", body = crate::error::ErrorBody),
+        (status = 404, description = "Bitnob webhooks aren't configured", body = crate::error::ErrorBody),
+    )
+)]
+pub async fn bitnob(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<StatusCode, ApiError> {
+    let Some(secret) = state.config().bitnob_webhook_secret.as_ref() else {
+        return Err(ApiError::not_found());
+    };
+    let signature = header(&headers, "x-bitnob-signature").ok_or_else(invalid_signature)?;
+    if !mergetip_fiat::signing::verify_webhook(secret.expose(), &body, signature) {
+        return Err(invalid_signature());
+    }
+    let payload: serde_json::Value = serde_json::from_slice(&body).map_err(|_| {
+        ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_payload",
+            "The webhook body is not JSON.",
+        )
+    })?;
+    let event_id = payload
+        .get("event_id")
+        .and_then(serde_json::Value::as_str)
+        .or_else(|| header(&headers, "x-bitnob-event-id"))
+        .filter(|id| !id.is_empty() && id.len() <= 200)
+        .ok_or_else(|| missing_header("x-bitnob-event-id"))?
+        .to_owned();
+
+    let mut tx = state.pool().begin().await.map_err(ApiError::internal)?;
+    let is_new =
+        mergetip_store::bitnob_events::insert_if_new(&mut *tx, &event_id, &payload).await?;
+    if is_new {
+        jobs::enqueue(
+            &mut tx,
+            &mergetip_engine::jobs::ProcessBitnobEvent {
+                event_id: event_id.clone(),
+            },
+        )
+        .await?;
+    }
+    tx.commit().await.map_err(ApiError::internal)?;
+    tracing::info!(%event_id, duplicate = !is_new, "Bitnob webhook accepted");
+    Ok(StatusCode::OK)
+}

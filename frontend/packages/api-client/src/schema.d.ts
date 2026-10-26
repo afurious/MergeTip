@@ -376,6 +376,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/webhooks/bitnob": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Receive a Bitnob payout event (RFC 0004): check the signature over the raw body, store it once
+         *     per `event_id`, and queue it. Processing happens in the worker.
+         */
+        post: operations["receive_bitnob_webhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/webhooks/github": {
         parameters: {
             query?: never;
@@ -1645,6 +1665,59 @@ export interface operations {
             };
             /** @description Not signed in */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    receive_bitnob_webhook: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description HMAC-SHA512 of the raw body */
+                "x-bitnob-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Raw event payload */
+        requestBody: {
+            content: {
+                "application/json": string;
+            };
+        };
+        responses: {
+            /** @description Stored for processing (or already stored) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No event ID or not JSON */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Signature missing or wrong */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Bitnob webhooks aren't configured */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -40,6 +40,8 @@ uuid.workspace = true
 utoipa.workspace = true
 
 [dev-dependencies]
+hmac.workspace = true
+sha2.workspace = true
 mergetip-fiat = { workspace = true, features = ["testing"] }
 mergetip-notify = { workspace = true, features = ["testing"] }
 tracing-subscriber.workspace = true

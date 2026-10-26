@@ -488,3 +488,131 @@ async fn a_lost_wallet_answer_is_reconciled_not_paid_again(pool: PgPool) -> sqlx
     assert_eq!(w.fiat.state().initialized.len(), 1, "no second payout");
     Ok(())
 }
+
+/// Stores and applies a Bitnob webhook, as the endpoint and worker do.
+async fn webhook(w: &World, event_id: &str, event: &str, payout: &str, reference: &str) {
+    let payload = json!({
+        "event": event, "event_id": event_id,
+        "data": { "id": payout, "reference": reference, "status": "x" }
+    });
+    mergetip_store::bitnob_events::insert_if_new(&w.pool, event_id, &payload)
+        .await
+        .unwrap();
+    w.engine.process_bitnob_event(event_id).await.unwrap();
+}
+
+async fn funded(w: &World) -> (TipId, String) {
+    w.invoices(5_000, 1);
+    let tip = w.paying_tip(5_000).await;
+    w.engine.pay_tip(tip, false).await.unwrap();
+    assert_eq!(w.tip(tip).await.state, TipState::FiatProcessing);
+    (tip, format!("{tip}:1:1"))
+}
+
+async fn paid_out_replies(w: &World) -> i64 {
+    sqlx::query_scalar!(
+        r#"SELECT count(*) AS "n!" FROM jobs WHERE kind = 'post_reply'
+           AND payload->'reply'->>'message' = 'paid_out'"#
+    )
+    .fetch_one(&w.pool)
+    .await
+    .unwrap()
+}
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn the_success_webhook_marks_the_tip_paid_with_a_receipt(pool: PgPool) -> sqlx::Result<()> {
+    let w = World::new(pool).await;
+    let (tip, reference) = funded(&w).await;
+    webhook(&w, "ev1", "payouts.processing", "po_1", &reference).await;
+    assert_eq!(w.tip(tip).await.state, TipState::FiatProcessing);
+    webhook(&w, "ev2", "payouts.withdrawal.success", "po_1", &reference).await;
+    let paid = w.tip(tip).await;
+    assert_eq!(paid.state, TipState::Paid);
+    assert_eq!(paid.fiat.provider_status.as_deref(), Some("success"));
+    assert_eq!(paid_out_replies(&w).await, 1);
+
+    // Retried and late events change nothing.
+    webhook(&w, "ev2", "payouts.withdrawal.success", "po_1", &reference).await;
+    webhook(&w, "ev3", "payouts.processing", "po_1", &reference).await;
+    webhook(&w, "ev4", "payouts.withdrawal.expired", "po_1", &reference).await;
+    let still = w.tip(tip).await;
+    assert_eq!(still.state, TipState::Paid);
+    assert_eq!(still.fiat.provider_status.as_deref(), Some("success"));
+    assert_eq!(paid_out_replies(&w).await, 1);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn an_expired_payout_leaves_the_tip_stuck_for_an_operator(pool: PgPool) -> sqlx::Result<()> {
+    let w = World::new(pool).await;
+    let (tip, reference) = funded(&w).await;
+    webhook(&w, "ev1", "payouts.withdrawal.expired", "po_1", &reference).await;
+    let stuck = w.tip(tip).await;
+    assert_eq!(stuck.state, TipState::FiatStuck);
+    assert_eq!(stuck.error_code.as_deref(), Some("payout_failed"));
+    // A late success doesn't silently paper over it: an operator resolves stuck payouts.
+    webhook(&w, "ev2", "payouts.withdrawal.success", "po_1", &reference).await;
+    assert_eq!(w.tip(tip).await.state, TipState::FiatStuck);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn events_for_unknown_payouts_are_ignored(pool: PgPool) -> sqlx::Result<()> {
+    let w = World::new(pool).await;
+    let (tip, _) = funded(&w).await;
+    webhook(&w, "ev1", "payouts.withdrawal.success", "po_other", "junk").await;
+    webhook(
+        &w,
+        "ev2",
+        "payouts.withdrawal.success",
+        "po_9",
+        &format!("{tip}:9:9"),
+    )
+    .await;
+    assert_eq!(w.tip(tip).await.state, TipState::FiatProcessing);
+    let processed = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "n!" FROM bitnob_events WHERE processed_at IS NOT NULL"#
+    )
+    .fetch_one(&w.pool)
+    .await?;
+    assert_eq!(processed, 2);
+    Ok(())
+}
+
+/// Bitnob confirms delivery before the sender's wallet answers: the success is recorded and
+/// applied as soon as the payment is.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn a_success_that_beats_the_wallet_still_lands(pool: PgPool) -> sqlx::Result<()> {
+    let w = World::new(pool).await;
+    w.invoices(5_000, 1);
+    w.wallet.plan(&[Step::PayAndTimeOut]);
+    let tip = w.paying_tip(5_000).await;
+    w.engine.pay_tip(tip, false).await.unwrap();
+    assert_eq!(w.tip(tip).await.state, TipState::Paying);
+
+    webhook(
+        &w,
+        "ev1",
+        "payouts.withdrawal.success",
+        "po_1",
+        &format!("{tip}:1:1"),
+    )
+    .await;
+    assert_eq!(
+        w.tip(tip).await.state,
+        TipState::Paying,
+        "waits for the payment proof"
+    );
+
+    let payload = sqlx::query_scalar!("SELECT payload FROM jobs WHERE kind = 'reconcile_payment'")
+        .fetch_one(&w.pool)
+        .await?;
+    let job = ReconcilePayment::decode(&payload).unwrap();
+    w.engine
+        .reconcile_payment(job.tip_id, job.attempt_id)
+        .await
+        .unwrap();
+    assert_eq!(w.tip(tip).await.state, TipState::Paid);
+    assert_eq!(paid_out_replies(&w).await, 1);
+    Ok(())
+}

@@ -69,6 +69,7 @@ use crate::{
         email::unsubscribe_link,
         email::unsubscribe_one_click,
         webhooks::resend,
+        webhooks::bitnob,
     ),
     components(schemas(
         ErrorBody,

@@ -12,8 +12,8 @@ use mergetip_worker::{
     Runner, WorkerConfig,
     handlers::{
         ExpireTipsHandler, NoopHandler, NotifyPledgeHandler, PayTipHandler, PostReplyHandler,
-        ProcessEventHandler, ReconcilePaymentHandler, ResolveHeldHandler, ResumeSenderTipsHandler,
-        SendDigestHandler, VerifyTipHandler,
+        ProcessBitnobEventHandler, ProcessEventHandler, ReconcilePaymentHandler,
+        ResolveHeldHandler, ResumeSenderTipsHandler, SendDigestHandler, VerifyTipHandler,
     },
 };
 
@@ -96,6 +96,7 @@ async fn main() -> anyhow::Result<()> {
         .register(NotifyPledgeHandler(engine.clone()))
         .register(SendDigestHandler(engine.clone()))
         .register(ExpireTipsHandler(engine.clone()))
+        .register(ProcessBitnobEventHandler(engine.clone()))
         .register(ReconcilePaymentHandler(engine))
         .run(shutdown::on_signal())
         .await;

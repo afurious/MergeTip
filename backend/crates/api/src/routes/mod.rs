@@ -101,7 +101,8 @@ pub fn router(state: AppState) -> Router {
             get(email::unsubscribe_link).post(email::unsubscribe_one_click),
         )
         .route("/webhooks/github", post(webhooks::github))
-        .route("/webhooks/resend", post(webhooks::resend));
+        .route("/webhooks/resend", post(webhooks::resend))
+        .route("/webhooks/bitnob", post(webhooks::bitnob));
 
     // Layers run outermost-last. CORS wraps every layer that can answer on its own (body limit,
     // timeout) and the error normaliser, so even those responses reach the browser readable and

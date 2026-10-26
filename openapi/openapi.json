@@ -1395,6 +1395,72 @@
         ]
       }
     },
+    "/v1/webhooks/bitnob": {
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Receive a Bitnob payout event (RFC 0004): check the signature over the raw body, store it once\nper `event_id`, and queue it. Processing happens in the worker.",
+        "operationId": "receive_bitnob_webhook",
+        "parameters": [
+          {
+            "name": "x-bitnob-signature",
+            "in": "header",
+            "description": "HMAC-SHA512 of the raw body",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Raw event payload",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Stored for processing (or already stored)"
+          },
+          "400": {
+            "description": "No event ID or not JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signature missing or wrong",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Bitnob webhooks aren't configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/webhooks/github": {
       "post": {
         "tags": [

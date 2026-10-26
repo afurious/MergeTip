@@ -107,6 +107,9 @@ impl Engine {
             },
             TipMessage::Held => replies::held(&context),
             TipMessage::Expired => replies::pledge_expired(&context),
+            TipMessage::PaidOut => {
+                replies::paid_out(&context, tip.payment_hash.as_deref().unwrap_or_default())
+            }
             TipMessage::Cancelled => replies::cancelled(
                 tip.error_code.as_deref().unwrap_or("unknown"),
                 &context,
