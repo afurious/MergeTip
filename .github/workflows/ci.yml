@@ -58,12 +58,26 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit,sqlx-cli@0.9.0-alpha.1
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+      - run: cargo test --workspace --exclude mergetip-e2e
+      - name: End-to-end tests (api + worker against the service Postgres)
+        run: cargo test -p mergetip-e2e
+      - name: Offline query data matches the schema
+        run: |
+          sqlx migrate run
+          cargo sqlx prepare --workspace --check -- --all-targets
+      - name: OpenAPI drift (the committed contract is what the code generates)
+        run: cargo run --quiet -p mergetip-api -- openapi | diff -u ../openapi/openapi.json -
+      - name: Security advisories
+        run: cargo audit
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           manifest-path: backend/Cargo.toml
+          command: check advisories licenses bans sources
 
   coverage:
     needs: changes
