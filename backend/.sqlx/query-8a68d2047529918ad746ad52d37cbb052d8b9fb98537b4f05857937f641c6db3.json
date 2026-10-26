@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT code_hmac FROM otp_codes",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "code_hmac",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "otp_codes",
+            "name": "code_hmac"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8a68d2047529918ad746ad52d37cbb052d8b9fb98537b4f05857937f641c6db3"
+}

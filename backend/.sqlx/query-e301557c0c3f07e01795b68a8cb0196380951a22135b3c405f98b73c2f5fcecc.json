@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM otp_codes WHERE tip_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e301557c0c3f07e01795b68a8cb0196380951a22135b3c405f98b73c2f5fcecc"
+}

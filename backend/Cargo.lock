@@ -1972,6 +1972,7 @@ dependencies = [
  "mergetip-crypto",
  "mergetip-engine",
  "mergetip-github",
+ "mergetip-notify",
  "mergetip-payer",
  "mergetip-runtime",
  "mergetip-store",
@@ -2031,6 +2032,7 @@ dependencies = [
  "mergetip-crypto",
  "mergetip-engine",
  "mergetip-github",
+ "mergetip-notify",
  "mergetip-payer",
  "mergetip-store",
  "mergetip-worker",
@@ -2109,9 +2111,6 @@ name = "mergetip-notify"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "mergetip-core",
- "reqwest",
- "serde",
  "thiserror 2.0.21",
 ]
 

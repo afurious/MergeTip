@@ -111,6 +111,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/confirmations/{tip_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A high-value tip waiting for its sender's confirmation. */
+        get: operations["get_confirmation"];
+        put?: never;
+        /** Confirm a high-value tip: it is paid now, or when its PR merges for an on-merge tip. */
+        post: operations["confirm_tip"];
+        /** Cancel a high-value tip instead of confirming it. Nothing is charged. */
+        delete: operations["cancel_confirmation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/confirmations/{tip_id}/otp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Email a 6-digit code for confirming this tip (only when the sender turned codes on). */
+        post: operations["send_confirmation_code"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/health": {
         parameters: {
             query?: never;
@@ -236,6 +272,10 @@ export interface components {
         ClaimRequest: {
             /** @description Where to receive the sats. Omit to use the address already saved in settings. */
             lightning_address?: string | null;
+        };
+        ConfirmRequest: {
+            /** @description The emailed code; required when confirmation codes are on. */
+            otp?: string | null;
         };
         ErrorBody: {
             error: components["schemas"]["ErrorDetail"];
@@ -558,6 +598,219 @@ export interface operations {
             };
             /** @description `no_address`, `lnurl_invalid` or `lnurl_unreachable` */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_confirmation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tip_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipEnvelope"];
+                };
+            };
+            /** @description `not_sender` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description No such tip */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    confirm_tip: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tip_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Optional unless codes are on */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipEnvelope"];
+                };
+            };
+            /** @description `not_sender` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `not_awaiting_confirmation` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `confirmation_expired` */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `otp_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    cancel_confirmation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tip_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelled */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_sender` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `not_awaiting_confirmation` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    send_confirmation_code: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tip_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Code sent */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_sender` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `not_awaiting_confirmation` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `confirmation_expired` */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `otp_not_enabled` or `otp_unavailable` (no email on file) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `otp_rate_limited` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `email_failed` */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

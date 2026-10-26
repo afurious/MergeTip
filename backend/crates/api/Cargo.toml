@@ -17,6 +17,7 @@ mergetip-payer.workspace = true
 mergetip-store.workspace = true
 mergetip-crypto.workspace = true
 mergetip-engine.workspace = true
+mergetip-notify.workspace = true
 mergetip-runtime.workspace = true
 anyhow.workspace = true
 axum.workspace = true
@@ -36,6 +37,7 @@ uuid.workspace = true
 utoipa.workspace = true
 
 [dev-dependencies]
+mergetip-notify = { workspace = true, features = ["testing"] }
 tracing-subscriber.workspace = true
 async-trait.workspace = true
 mergetip-payer = { workspace = true, features = ["testing"] }

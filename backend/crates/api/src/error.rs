@@ -89,6 +89,15 @@ impl From<StoreError> for ApiError {
     }
 }
 
+impl From<mergetip_engine::EngineError> for ApiError {
+    fn from(err: mergetip_engine::EngineError) -> Self {
+        match err {
+            mergetip_engine::EngineError::Store(store) => store.into(),
+            other => Self::internal(other),
+        }
+    }
+}
+
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let body = ErrorBody {

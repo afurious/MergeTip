@@ -9,6 +9,7 @@ pub mod feature_flags;
 pub mod github_events;
 pub mod installations;
 pub mod jobs;
+pub mod otp_codes;
 pub mod payment_attempts;
 pub mod sent_replies;
 pub mod sessions;

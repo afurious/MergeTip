@@ -13,6 +13,7 @@ use crate::{
     routes::{
         auth::{self, ExtensionToken},
         claims::{self, ClaimRequest},
+        confirmations::{self, ConfirmRequest},
         health::{self, Health},
         me::{self, Caps, Me, WalletStatus},
         settings::{self, AddressRequest, SettingsRequest, WalletRequest},
@@ -43,6 +44,10 @@ use crate::{
         settings::update_settings,
         claims::get_claim,
         claims::claim_tip,
+        confirmations::get_confirmation,
+        confirmations::send_code,
+        confirmations::confirm_tip,
+        confirmations::cancel_tip,
     ),
     components(schemas(
         ErrorBody,
@@ -61,6 +66,7 @@ use crate::{
         UserRef,
         TipEnvelope,
         ClaimRequest,
+        ConfirmRequest,
     )),
     modifiers(&SecuritySchemes),
     tags(
@@ -69,6 +75,7 @@ use crate::{
         (name = "auth", description = "Signing in and sessions"),
         (name = "me", description = "The signed-in user's account and settings"),
         (name = "claims", description = "Claiming pledged tips"),
+        (name = "confirmations", description = "Confirming high-value tips"),
     )
 )]
 pub struct ApiDoc;

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT confirmed_at FROM tips WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "confirmed_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "confirmed_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "edb95d9603c9d35a2b92c95d53aa3ef9474fdb71ea6569084e5f4930099cec4d"
+}

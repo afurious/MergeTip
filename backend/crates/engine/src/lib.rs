@@ -5,6 +5,7 @@
 //! follow-up jobs, so a crash can never leave a tip in a state with no job to move it on.
 
 mod comments;
+pub mod confirm;
 mod error;
 mod events;
 mod expiry;

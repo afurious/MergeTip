@@ -310,6 +310,281 @@
         ]
       }
     },
+    "/v1/confirmations/{tip_id}": {
+      "get": {
+        "tags": [
+          "confirmations"
+        ],
+        "summary": "A high-value tip waiting for its sender's confirmation.",
+        "operationId": "get_confirmation",
+        "parameters": [
+          {
+            "name": "tip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TipEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`not_sender`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such tip",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "confirmations"
+        ],
+        "summary": "Confirm a high-value tip: it is paid now, or when its PR merges for an on-merge tip.",
+        "operationId": "confirm_tip",
+        "parameters": [
+          {
+            "name": "tip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Optional unless codes are on",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TipEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`not_sender`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`not_awaiting_confirmation`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "`confirmation_expired`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`otp_invalid`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "confirmations"
+        ],
+        "summary": "Cancel a high-value tip instead of confirming it. Nothing is charged.",
+        "operationId": "cancel_confirmation",
+        "parameters": [
+          {
+            "name": "tip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Cancelled"
+          },
+          "403": {
+            "description": "`not_sender`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`not_awaiting_confirmation`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/v1/confirmations/{tip_id}/otp": {
+      "post": {
+        "tags": [
+          "confirmations"
+        ],
+        "summary": "Email a 6-digit code for confirming this tip (only when the sender turned codes on).",
+        "operationId": "send_confirmation_code",
+        "parameters": [
+          {
+            "name": "tip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Code sent"
+          },
+          "403": {
+            "description": "`not_sender`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`not_awaiting_confirmation`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "`confirmation_expired`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`otp_not_enabled` or `otp_unavailable` (no email on file)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`otp_rate_limited`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`email_failed`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/v1/health": {
       "get": {
         "tags": [
@@ -657,6 +932,19 @@
               "null"
             ],
             "description": "Where to receive the sats. Omit to use the address already saved in settings."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConfirmRequest": {
+        "type": "object",
+        "properties": {
+          "otp": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The emailed code; required when confirmation codes are on."
           }
         },
         "additionalProperties": false
@@ -1021,6 +1309,10 @@
     {
       "name": "claims",
       "description": "Claiming pledged tips"
+    },
+    {
+      "name": "confirmations",
+      "description": "Confirming high-value tips"
     }
   ]
 }

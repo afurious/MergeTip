@@ -2,6 +2,7 @@
 
 pub(crate) mod auth;
 pub(crate) mod claims;
+pub(crate) mod confirmations;
 pub(crate) mod health;
 pub(crate) mod me;
 pub(crate) mod settings;
@@ -67,6 +68,16 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/claims/{token}",
             get(claims::get_claim).post(claims::claim_tip),
+        )
+        .route(
+            "/confirmations/{tip_id}",
+            get(confirmations::get_confirmation)
+                .post(confirmations::confirm_tip)
+                .delete(confirmations::cancel_tip),
+        )
+        .route(
+            "/confirmations/{tip_id}/otp",
+            post(confirmations::send_code),
         )
         .route("/webhooks/github", post(webhooks::github));
 

@@ -50,6 +50,24 @@ pub fn state_with(
     wallets: Arc<dyn WalletConnector>,
     receivers: Arc<dyn ReceiverEndpoint>,
 ) -> AppState {
+    state_with_mailer(
+        pool,
+        github_base,
+        clock,
+        wallets,
+        receivers,
+        Arc::new(mergetip_notify::DisabledMailer),
+    )
+}
+
+pub fn state_with_mailer(
+    pool: PgPool,
+    github_base: &str,
+    clock: Arc<dyn Clock>,
+    wallets: Arc<dyn WalletConnector>,
+    receivers: Arc<dyn ReceiverEndpoint>,
+    mailer: Arc<dyn mergetip_notify::Mailer>,
+) -> AppState {
     let env = env(github_base);
     let env: HashMap<&str, &str> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
     let config = Arc::new(ApiConfig::from_env(&env).unwrap());
@@ -68,6 +86,7 @@ pub fn state_with(
             oauth: Arc::new(oauth),
             wallets,
             receivers,
+            mailer,
         },
     )
 }

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE otp_codes SET attempts = attempts + 1 WHERE tip_id = $1 RETURNING attempts",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "attempts",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "otp_codes",
+            "name": "attempts"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "482e9e66923a2c47ae0e0334cff463b1e40cf561c8a52fff0997a6d680acf46b"
+}

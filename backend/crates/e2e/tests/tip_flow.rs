@@ -165,6 +165,7 @@ impl System {
             receivers: Arc::new(
                 LnurlClient::new(Network::Regtest, true, Arc::new(SystemClock)).unwrap(),
             ),
+            mailer: Arc::new(mergetip_notify::DisabledMailer),
         };
         let api = router(AppState::new(
             pool.clone(),

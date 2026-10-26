@@ -249,6 +249,8 @@ pub struct TipPatch {
     /// `tips.claim_token:{id}`. Cleared only by [`clear_claim_token`].
     pub claim_token_hash: Option<String>,
     pub claim_token_ciphertext: Option<Vec<u8>>,
+    /// When the sender confirmed a high-value tip in the web app.
+    pub confirmed_at: Option<OffsetDateTime>,
 }
 
 impl TipPatch {
@@ -295,7 +297,8 @@ pub async fn transition(
             payment_hash = COALESCE($10, payment_hash),
             preimage = COALESCE($11, preimage),
             claim_token_hash = COALESCE($12, claim_token_hash),
-            claim_token_ciphertext = COALESCE($13, claim_token_ciphertext)
+            claim_token_ciphertext = COALESCE($13, claim_token_ciphertext),
+            confirmed_at = COALESCE($14, confirmed_at)
         WHERE id = $1 AND state = $2
         RETURNING *
         "#,
@@ -312,6 +315,7 @@ pub async fn transition(
         patch.preimage,
         patch.claim_token_hash,
         patch.claim_token_ciphertext,
+        patch.confirmed_at,
     )
     .fetch_optional(&mut *tx)
     .await?;
