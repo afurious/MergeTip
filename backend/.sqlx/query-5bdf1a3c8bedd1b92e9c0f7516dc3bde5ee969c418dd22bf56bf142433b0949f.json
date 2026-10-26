@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE tips SET claim_token_hash = NULL, claim_token_ciphertext = NULL WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5bdf1a3c8bedd1b92e9c0f7516dc3bde5ee969c418dd22bf56bf142433b0949f"
+}

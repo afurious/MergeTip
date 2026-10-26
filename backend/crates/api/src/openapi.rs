@@ -12,9 +12,11 @@ use crate::{
     error::{ErrorBody, ErrorDetail},
     routes::{
         auth::{self, ExtensionToken},
+        claims::{self, ClaimRequest},
         health::{self, Health},
         me::{self, Caps, Me, WalletStatus},
         settings::{self, AddressRequest, SettingsRequest, WalletRequest},
+        tips::{Tip, TipEnvelope, TipKindBody, TipState, UserRef},
         webhooks,
     },
 };
@@ -39,6 +41,8 @@ use crate::{
         settings::disconnect_wallet,
         settings::set_lightning_address,
         settings::update_settings,
+        claims::get_claim,
+        claims::claim_tip,
     ),
     components(schemas(
         ErrorBody,
@@ -51,6 +55,12 @@ use crate::{
         WalletRequest,
         AddressRequest,
         SettingsRequest,
+        Tip,
+        TipState,
+        TipKindBody,
+        UserRef,
+        TipEnvelope,
+        ClaimRequest,
     )),
     modifiers(&SecuritySchemes),
     tags(
@@ -58,6 +68,7 @@ use crate::{
         (name = "webhooks", description = "Signed deliveries from external services"),
         (name = "auth", description = "Signing in and sessions"),
         (name = "me", description = "The signed-in user's account and settings"),
+        (name = "claims", description = "Claiming pledged tips"),
     )
 )]
 pub struct ApiDoc;

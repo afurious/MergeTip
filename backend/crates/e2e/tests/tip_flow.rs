@@ -642,6 +642,64 @@ async fn a_tip_waits_for_the_senders_wallet_then_pays(pool: PgPool) -> sqlx::Res
     Ok(())
 }
 
+/// A receiver without a Lightning address gets a pledge, then claims it with the link from the
+/// thread: the sender's wallet pays it to the address they give.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn a_pledge_is_claimed_and_paid(pool: PgPool) -> sqlx::Result<()> {
+    let system = System::start(pool).await;
+    system.connect_wallet().await;
+    let worker = system.worker(WorkerOptions::default());
+
+    system
+        .deliver("delivery-1", "/tip @reviewer 2100 for the review")
+        .await;
+    system.wait_for_idle_queue().await;
+    let state = sqlx::query_scalar!("SELECT state FROM tips")
+        .fetch_one(&system.pool)
+        .await?;
+    assert_eq!(state, "pledged");
+    assert!(
+        system.wallet.paid_hashes().is_empty(),
+        "nothing charged yet"
+    );
+    let link = claim_link(&system.comments().await);
+
+    let reviewer = system.sign_in("reviewer-code").await;
+    let address = format!("reviewer@{}", system.lnurl.address());
+    let (status, body) = system
+        .write(
+            "POST",
+            &format!("/v1/claims/{link}"),
+            &reviewer,
+            json!({ "lightning_address": address }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    system.wait_for_idle_queue().await;
+
+    let tip = sqlx::query!("SELECT state, payment_hash FROM tips")
+        .fetch_one(&system.pool)
+        .await?;
+    assert_eq!(tip.state, "paid");
+    assert_eq!(
+        system.wallet.paid_hashes(),
+        [tip.payment_hash.expect("payment hash")]
+    );
+    worker.stop().await;
+    Ok(())
+}
+
+/// The claim token from the pledge reply's link.
+fn claim_link(comments: &[String]) -> String {
+    let marker = "https://mergetip.dev/claim/";
+    let body = comments
+        .iter()
+        .find(|b| b.contains(marker))
+        .expect("a pledge reply with a claim link");
+    let start = body.find(marker).unwrap() + marker.len();
+    body[start..].split(')').next().unwrap().to_owned()
+}
+
 #[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
 async fn redeliveries_pay_once(pool: PgPool) -> sqlx::Result<()> {
     let system = System::start(pool).await;

@@ -139,12 +139,24 @@ pub fn rejected(code: &str, tip: &TipContext<'_>, limits: &Limits, settings_link
     }
 }
 
-/// Sent when the receiver has no Lightning address yet: nothing was charged, the tip waits for
-/// them. The receiver is verified by now, so mentioning them is fine (and is the point).
-pub fn pledged(tip: &TipContext<'_>, link: &str) -> String {
+/// Sent when the receiver has no Lightning address yet: nothing was charged, and the tip waits
+/// 30 days for them to claim it. The receiver is verified by now, so mentioning them is fine (and
+/// is the point). The link is public; claiming still needs the receiver's GitHub sign-in.
+pub fn pledged(tip: &TipContext<'_>, claim_link: &str) -> String {
     format!(
-        "⚡ @{}, @{} sent you **{}**{}. Nothing has been charged yet: add a Lightning address to \
-         receive it → [Receive sats]({link})",
+        "⚡ @{}, @{} sent you **{}**{}. Claim within 30 days → [Claim your sats]({claim_link})",
+        tip.receiver,
+        tip.sender,
+        tip.amount,
+        note_suffix(tip.note)
+    )
+}
+
+/// The pledge reply when the pledge was already claimed (or closed) before the reply was posted:
+/// no link to a token that no longer works.
+pub fn pledge_claimed(tip: &TipContext<'_>) -> String {
+    format!(
+        "⚡ @{}, @{} sent you **{}**{}.",
         tip.receiver,
         tip.sender,
         tip.amount,
@@ -386,8 +398,9 @@ mod tests {
             .collect();
         rendered.push(pledged(
             &tip(Some("the docs")),
-            "https://mergetip.dev/settings/receive",
+            "https://mergetip.dev/claim/q2V3cGxhaW5fdG9rZW4",
         ));
+        rendered.push(pledge_claimed(&tip(Some("the docs"))));
         insta::assert_snapshot!(rendered.join("\n"));
     }
 

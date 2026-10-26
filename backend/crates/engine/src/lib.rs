@@ -25,7 +25,7 @@ use mergetip_store::PgPool;
 
 pub use error::EngineError;
 pub use expiry::{EXPIRY_BATCH, ExpiryReport};
-pub use pay::{MAX_PAYMENT_ATTEMPTS, PAY_TIMEOUT, ReconcileOutcome};
+pub use pay::{MAX_PAYMENT_ATTEMPTS, PAY_TIMEOUT, PLEDGE_WINDOW, ReconcileOutcome};
 pub use verify::{Decision, decide};
 
 /// Tips a sender may create per rolling hour (PRD "Limits").
@@ -101,5 +101,25 @@ impl Engine {
 
     fn link(&self, path: &str) -> String {
         format!("{}{path}", self.settings.web_base_url.trim_end_matches('/'))
+    }
+
+    /// The pledge's claim link, while it has an unused token. The raw token is only ever held in
+    /// memory long enough to render a reply or an email.
+    async fn claim_link(
+        &self,
+        tip: &mergetip_store::tips::Tip,
+    ) -> Result<Option<String>, EngineError> {
+        let Some(sealed) = mergetip_store::tips::claim_token_ciphertext(&self.pool, tip.id).await?
+        else {
+            return Ok(None);
+        };
+        let token = self
+            .payments
+            .keyring
+            .open(&sealed, format!("tips.claim_token:{}", tip.id).as_bytes())
+            .map_err(|err| EngineError::Malformed(format!("cannot open a claim token: {err}")))?;
+        let token = String::from_utf8(token.expose().clone())
+            .map_err(|_| EngineError::Malformed("claim token is not UTF-8".into()))?;
+        Ok(Some(self.link(&format!("/claim/{token}"))))
     }
 }

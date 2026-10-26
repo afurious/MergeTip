@@ -106,6 +106,9 @@ struct TipRow {
     // Selected by `*` but deliberately not exposed: claim tokens are looked up by hash only.
     #[allow(dead_code)]
     claim_token_hash: Option<String>,
+    // Likewise: read only through [`claim_token_ciphertext`], so `Tip` never carries a secret.
+    #[allow(dead_code)]
+    claim_token_ciphertext: Option<Vec<u8>>,
     confirm_expires_at: Option<OffsetDateTime>,
     confirmed_at: Option<OffsetDateTime>,
     expires_at: Option<OffsetDateTime>,
@@ -242,6 +245,10 @@ pub struct TipPatch {
     pub confirm_expires_at: Option<OffsetDateTime>,
     pub payment_hash: Option<String>,
     pub preimage: Option<String>,
+    /// SHA-256 of a new claim token, and the token itself sealed with AAD
+    /// `tips.claim_token:{id}`. Cleared only by [`clear_claim_token`].
+    pub claim_token_hash: Option<String>,
+    pub claim_token_ciphertext: Option<Vec<u8>>,
 }
 
 impl TipPatch {
@@ -286,7 +293,9 @@ pub async fn transition(
             expires_at = COALESCE($8, expires_at),
             confirm_expires_at = COALESCE($9, confirm_expires_at),
             payment_hash = COALESCE($10, payment_hash),
-            preimage = COALESCE($11, preimage)
+            preimage = COALESCE($11, preimage),
+            claim_token_hash = COALESCE($12, claim_token_hash),
+            claim_token_ciphertext = COALESCE($13, claim_token_ciphertext)
         WHERE id = $1 AND state = $2
         RETURNING *
         "#,
@@ -301,6 +310,8 @@ pub async fn transition(
         patch.confirm_expires_at,
         patch.payment_hash,
         patch.preimage,
+        patch.claim_token_hash,
+        patch.claim_token_ciphertext,
     )
     .fetch_optional(&mut *tx)
     .await?;
@@ -461,6 +472,64 @@ pub async fn lock_expired(
     .into_iter()
     .map(TryInto::try_into)
     .collect()
+}
+
+/// The pledge whose claim token hashes to `token_hash`, if any. Claimed and expired-and-claimed
+/// tips have no token, so a used link finds nothing.
+pub async fn get_by_claim_hash(
+    exec: impl PgExecutor<'_>,
+    token_hash: &str,
+) -> StoreResult<Option<Tip>> {
+    sqlx::query_as!(
+        TipRow,
+        "SELECT * FROM tips WHERE claim_token_hash = $1",
+        token_hash
+    )
+    .fetch_optional(exec)
+    .await?
+    .map(TryInto::try_into)
+    .transpose()
+}
+
+/// [`get_by_claim_hash`], holding the row lock until the caller's transaction ends.
+pub async fn lock_by_claim_hash(
+    conn: &mut PgConnection,
+    token_hash: &str,
+) -> StoreResult<Option<Tip>> {
+    sqlx::query_as!(
+        TipRow,
+        "SELECT * FROM tips WHERE claim_token_hash = $1 FOR UPDATE",
+        token_hash
+    )
+    .fetch_optional(conn)
+    .await?
+    .map(TryInto::try_into)
+    .transpose()
+}
+
+/// The sealed claim token, for rendering the claim link into replies and emails.
+pub async fn claim_token_ciphertext(
+    exec: impl PgExecutor<'_>,
+    id: TipId,
+) -> StoreResult<Option<Vec<u8>>> {
+    let blob = sqlx::query_scalar!(
+        "SELECT claim_token_ciphertext FROM tips WHERE id = $1",
+        id.as_uuid()
+    )
+    .fetch_one(exec)
+    .await?;
+    Ok(blob)
+}
+
+/// Makes the claim link single-use: forgets both the hash and the sealed token.
+pub async fn clear_claim_token(exec: impl PgExecutor<'_>, id: TipId) -> StoreResult<()> {
+    sqlx::query!(
+        "UPDATE tips SET claim_token_hash = NULL, claim_token_ciphertext = NULL WHERE id = $1",
+        id.as_uuid()
+    )
+    .execute(exec)
+    .await?;
+    Ok(())
 }
 
 /// Records the payment hash of the tip's current attempt (each attempt has a fresh invoice).

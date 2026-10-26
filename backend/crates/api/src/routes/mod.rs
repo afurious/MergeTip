@@ -1,9 +1,11 @@
 //! Route table and middleware stack.
 
 pub(crate) mod auth;
+pub(crate) mod claims;
 pub(crate) mod health;
 pub(crate) mod me;
 pub(crate) mod settings;
+pub(crate) mod tips;
 pub(crate) mod webhooks;
 
 use std::time::Duration;
@@ -62,6 +64,10 @@ pub fn router(state: AppState) -> Router {
             put(settings::set_lightning_address),
         )
         .route("/me/settings", patch(settings::update_settings))
+        .route(
+            "/claims/{token}",
+            get(claims::get_claim).post(claims::claim_tip),
+        )
         .route("/webhooks/github", post(webhooks::github));
 
     // Layers run outermost-last. CORS wraps every layer that can answer on its own (body limit,

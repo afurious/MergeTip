@@ -80,6 +80,11 @@ impl Harness {
         }
     }
 
+    pub fn clock_now(&self) -> OffsetDateTime {
+        use mergetip_core::Clock;
+        self.clock.now()
+    }
+
     /// Gives `github_id` a wallet connection (its URI can't be decrypted, so it never pays).
     pub async fn wallet_for(&self, github_id: i64, login: &str) {
         sqlx::query!(

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT claim_token_ciphertext FROM tips WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "claim_token_ciphertext",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "claim_token_ciphertext"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "36f2d5895b241ceef8375de1af794e883c16e90017c4cb0d823827639d9968fe"
+}

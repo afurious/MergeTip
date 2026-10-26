@@ -8,6 +8,7 @@
 use std::time::Duration;
 
 use mergetip_core::{Msats, TipId, TipState};
+use mergetip_crypto::random_token;
 use mergetip_github::Reaction;
 use mergetip_payer::{
     LightningAddress, PaymentProof, ResolveError, SenderWallet, ValidatedInvoice,
@@ -34,6 +35,8 @@ use crate::{
 pub const PAY_TIMEOUT: Duration = Duration::from_secs(60);
 /// Payment attempts per tip before it fails for good.
 pub const MAX_PAYMENT_ATTEMPTS: i64 = 3;
+/// How long a pledge waits for its receiver to claim it (FR-11, journey B).
+pub const PLEDGE_WINDOW: time::Duration = time::Duration::days(30);
 /// Wait while payments are switched off globally.
 const PAUSED_RETRY: Duration = Duration::from_secs(300);
 /// First reconciliation check after a timeout, and the slowest re-check.
@@ -403,15 +406,32 @@ impl Engine {
         Ok(())
     }
 
-    /// The receiver has no Lightning address: nothing is charged, the tip waits for them.
+    /// The receiver has no Lightning address: nothing is charged, the tip waits 30 days for them
+    /// to claim it. The claim token's hash is the lookup key; the token itself is sealed so later
+    /// emails can repeat the link (RFC 0003).
     async fn pledge(&self, tip: &Tip) -> Result<(), EngineError> {
+        let token = random_token()
+            .map_err(|err| EngineError::Malformed(format!("cannot mint a claim token: {err}")))?;
+        let sealed = self
+            .payments
+            .keyring
+            .seal(
+                token.raw.expose().as_bytes(),
+                format!("tips.claim_token:{}", tip.id).as_bytes(),
+            )
+            .map_err(|err| EngineError::Malformed(format!("cannot seal a claim token: {err}")))?;
         let mut tx = self.pool.begin().await?;
         let pledged = tips::transition(
             &mut tx,
             tip.id,
             TipState::Paying,
             TipState::Pledged,
-            &TipPatch::default(),
+            &TipPatch {
+                expires_at: Some(self.clock.now() + PLEDGE_WINDOW),
+                claim_token_hash: Some(token.hash),
+                claim_token_ciphertext: Some(sealed),
+                ..TipPatch::default()
+            },
             json!({ "reason": "no_lightning_address" }),
         )
         .await?;

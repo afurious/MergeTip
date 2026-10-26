@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        UPDATE tips SET\n            state = $3,\n            version = version + 1,\n            receiver_id = COALESCE($4, receiver_id),\n            verified_by = COALESCE($5, verified_by),\n            error_code = COALESCE($6, error_code),\n            error_detail = COALESCE($7, error_detail),\n            expires_at = COALESCE($8, expires_at),\n            confirm_expires_at = COALESCE($9, confirm_expires_at),\n            payment_hash = COALESCE($10, payment_hash),\n            preimage = COALESCE($11, preimage)\n        WHERE id = $1 AND state = $2\n        RETURNING *\n        ",
+  "query": "\n        UPDATE tips SET\n            state = $3,\n            version = version + 1,\n            receiver_id = COALESCE($4, receiver_id),\n            verified_by = COALESCE($5, verified_by),\n            error_code = COALESCE($6, error_code),\n            error_detail = COALESCE($7, error_detail),\n            expires_at = COALESCE($8, expires_at),\n            confirm_expires_at = COALESCE($9, confirm_expires_at),\n            payment_hash = COALESCE($10, payment_hash),\n            preimage = COALESCE($11, preimage),\n            claim_token_hash = COALESCE($12, claim_token_hash),\n            claim_token_ciphertext = COALESCE($13, claim_token_ciphertext)\n        WHERE id = $1 AND state = $2\n        RETURNING *\n        ",
   "describe": {
     "columns": [
       {
@@ -321,6 +321,17 @@
             "name": "updated_at"
           }
         }
+      },
+      {
+        "ordinal": 29,
+        "name": "claim_token_ciphertext",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "claim_token_ciphertext"
+          }
+        }
       }
     ],
     "parameters": {
@@ -335,7 +346,9 @@
         "Timestamptz",
         "Timestamptz",
         "Text",
-        "Text"
+        "Text",
+        "Text",
+        "Bytea"
       ]
     },
     "nullable": [
@@ -367,8 +380,9 @@
       true,
       true,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "7d214396ccef21c3b326d57973148a2c97dc09b6a2d867dbb3130ca6fa97f481"
+  "hash": "d35e4090f966d02cde865dd8ba16c0ef2f2a7a87e4729891834335853c188bf8"
 }

@@ -164,6 +164,152 @@
         ]
       }
     },
+    "/v1/claims/{token}": {
+      "get": {
+        "tags": [
+          "claims"
+        ],
+        "summary": "The pledge behind a claim link, for the claim page.",
+        "operationId": "get_claim",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "description": "The token from the claim link",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TipEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`claim_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "`claim_expired`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "claims"
+        ],
+        "summary": "Claim a pledge as its receiver: the sender's wallet pays it to the receiver's address.",
+        "operationId": "claim_tip",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "description": "The token from the claim link",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Optional; an empty body uses the saved address",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TipEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`not_receiver`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`claim_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`already_claimed`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "`claim_expired`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`no_address`, `lnurl_invalid` or `lnurl_unreachable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/v1/health": {
       "get": {
         "tags": [
@@ -502,6 +648,19 @@
           }
         }
       },
+      "ClaimRequest": {
+        "type": "object",
+        "properties": {
+          "lightning_address": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Where to receive the sats. Omit to use the address already saved in settings."
+          }
+        },
+        "additionalProperties": false
+      },
       "ErrorBody": {
         "type": "object",
         "required": [
@@ -658,6 +817,140 @@
         },
         "additionalProperties": false
       },
+      "Tip": {
+        "type": "object",
+        "required": [
+          "id",
+          "state",
+          "amount_sats",
+          "kind",
+          "sender",
+          "receiver",
+          "repo",
+          "thread_number",
+          "thread_url",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "amount_sats": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the tip's current wait ends: the confirmation deadline while it awaits confirmation,\notherwise the sender or pledge deadline."
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "now",
+              "on_merge"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "payment_hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "receiver": {
+            "$ref": "#/components/schemas/UserRef"
+          },
+          "repo": {
+            "type": "string",
+            "description": "`owner/name`."
+          },
+          "sender": {
+            "$ref": "#/components/schemas/UserRef"
+          },
+          "state": {
+            "$ref": "#/components/schemas/TipState"
+          },
+          "thread_number": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "thread_url": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TipEnvelope": {
+        "type": "object",
+        "description": "`{ tip }`, the body of the claim and confirmation endpoints.",
+        "required": [
+          "tip"
+        ],
+        "properties": {
+          "tip": {
+            "$ref": "#/components/schemas/Tip"
+          }
+        }
+      },
+      "TipKindBody": {
+        "type": "string",
+        "enum": [
+          "now",
+          "on_merge"
+        ]
+      },
+      "TipState": {
+        "type": "string",
+        "description": "A tip's state as clients see it. Internal fiat states map onto the closest public one until\nfiat payouts add their own values (M5).",
+        "enum": [
+          "received",
+          "awaiting_sender",
+          "verifying",
+          "awaiting_confirmation",
+          "held",
+          "paying",
+          "paid",
+          "pledged",
+          "rejected",
+          "cancelled",
+          "expired",
+          "failed"
+        ]
+      },
+      "UserRef": {
+        "type": "object",
+        "required": [
+          "login",
+          "avatar_url"
+        ],
+        "properties": {
+          "avatar_url": {
+            "type": "string"
+          },
+          "login": {
+            "type": "string"
+          }
+        }
+      },
       "WalletRequest": {
         "type": "object",
         "required": [
@@ -724,6 +1017,10 @@
     {
       "name": "me",
       "description": "The signed-in user's account and settings"
+    },
+    {
+      "name": "claims",
+      "description": "Claiming pledged tips"
     }
   ]
 }

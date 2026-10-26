@@ -321,6 +321,17 @@
             "name": "updated_at"
           }
         }
+      },
+      {
+        "ordinal": 29,
+        "name": "claim_token_ciphertext",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "claim_token_ciphertext"
+          }
+        }
       }
     ],
     "parameters": {
@@ -357,7 +368,8 @@
       true,
       true,
       false,
-      false
+      false,
+      true
     ]
   },
   "hash": "9d39656a6fdd46fc918d4c159788073e1cf8d09d80c08d45c19e95d5e664d622"

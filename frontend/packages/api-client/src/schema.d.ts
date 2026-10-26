@@ -93,6 +93,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/claims/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The pledge behind a claim link, for the claim page. */
+        get: operations["get_claim"];
+        put?: never;
+        /** Claim a pledge as its receiver: the sender's wallet pays it to the receiver's address. */
+        post: operations["claim_tip"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/health": {
         parameters: {
             query?: never;
@@ -215,6 +233,10 @@ export interface components {
              */
             spent_today_sats: number;
         };
+        ClaimRequest: {
+            /** @description Where to receive the sats. Omit to use the address already saved in settings. */
+            lightning_address?: string | null;
+        };
         ErrorBody: {
             error: components["schemas"]["ErrorDetail"];
         };
@@ -257,6 +279,49 @@ export interface components {
             email_opt_out?: boolean | null;
             /** Format: int64 */
             per_tip_max_sats?: number | null;
+        };
+        Tip: {
+            /** Format: int64 */
+            amount_sats: number;
+            /** Format: date-time */
+            created_at: string;
+            /**
+             * Format: date-time
+             * @description When the tip's current wait ends: the confirmation deadline while it awaits confirmation,
+             *     otherwise the sender or pledge deadline.
+             */
+            expires_at?: string | null;
+            id: string;
+            /** @enum {string} */
+            kind: "now" | "on_merge";
+            note?: string | null;
+            payment_hash?: string | null;
+            receiver: components["schemas"]["UserRef"];
+            /** @description `owner/name`. */
+            repo: string;
+            sender: components["schemas"]["UserRef"];
+            state: components["schemas"]["TipState"];
+            /** Format: int32 */
+            thread_number: number;
+            thread_url: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description `{ tip }`, the body of the claim and confirmation endpoints. */
+        TipEnvelope: {
+            tip: components["schemas"]["Tip"];
+        };
+        /** @enum {string} */
+        TipKindBody: "now" | "on_merge";
+        /**
+         * @description A tip's state as clients see it. Internal fiat states map onto the closest public one until
+         *     fiat payouts add their own values (M5).
+         * @enum {string}
+         */
+        TipState: "received" | "awaiting_sender" | "verifying" | "awaiting_confirmation" | "held" | "paying" | "paid" | "pledged" | "rejected" | "cancelled" | "expired" | "failed";
+        UserRef: {
+            avatar_url: string;
+            login: string;
         };
         WalletRequest: {
             /**
@@ -387,6 +452,118 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    get_claim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The token from the claim link */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipEnvelope"];
+                };
+            };
+            /** @description `claim_not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `claim_expired` */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    claim_tip: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The token from the claim link */
+                token: string;
+            };
+            cookie?: never;
+        };
+        /** @description Optional; an empty body uses the saved address */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClaimRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipEnvelope"];
+                };
+            };
+            /** @description `not_receiver` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `claim_not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `already_claimed` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `claim_expired` */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `no_address`, `lnurl_invalid` or `lnurl_unreachable` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
             };
         };
     };
