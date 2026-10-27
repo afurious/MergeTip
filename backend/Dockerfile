@@ -27,6 +27,8 @@ FROM gcr.io/distroless/cc-debian12:nonroot
 ARG BIN
 ARG VERSION=dev
 ARG GIT_SHA=unknown
+# Sentry tags events with this, so issues point at the deploy that introduced them.
+ENV SENTRY_RELEASE="mergetip@${VERSION}"
 LABEL org.opencontainers.image.title="${BIN}" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${GIT_SHA}" \

@@ -6,7 +6,8 @@ use crate::AppEnv;
 /// fields (`tip_id`, `job_id`, …). `RUST_LOG` overrides the default `info` filter.
 ///
 /// With a Sentry DSN, errors (and `error!` events) also go to Sentry, tagged with `service` so
-/// the api and worker can share one project. A sample of requests is traced: all of them in dev,
+/// the api and worker can share one project. The release is `SENTRY_RELEASE`, which the image
+/// sets from the build's version; without it every binary would report this crate's version. A sample of requests is traced: all of them in dev,
 /// a tenth elsewhere. Default PII is off: no IPs, headers or user data are attached, and the logs
 /// themselves never carry secrets. Keep the returned guard alive for the life of the process;
 /// dropping it flushes Sentry.
@@ -18,7 +19,11 @@ pub fn init(
 ) -> Option<sentry::ClientInitGuard> {
     let guard = sentry_dsn.map(|dsn| {
         let mut options = sentry::ClientOptions::default();
-        options.release = sentry::release_name!();
+        options.release = std::env::var("SENTRY_RELEASE")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .map(Into::into)
+            .or_else(|| sentry::release_name!());
         options.environment = Some(app_env.as_str().into());
         options.send_default_pii = false;
         let options = options.traces_sample_rate(if app_env.is_dev() { 1.0 } else { 0.1 });
