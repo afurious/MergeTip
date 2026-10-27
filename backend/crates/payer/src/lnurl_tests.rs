@@ -273,3 +273,46 @@ async fn plain_http_is_refused_for_public_hosts_and_without_dev_mode() {
         Err(ResolveError::Invalid("callback is not HTTPS".into()))
     );
 }
+
+/// M3 review (SSRF): the address's server chooses the callback; it must not aim the worker at
+/// an internal address such as the cloud metadata service.
+#[tokio::test]
+async fn callbacks_to_internal_hosts_are_refused() {
+    let server = MockServer::start().await;
+    for callback in [
+        "https://169.254.169.254/latest/meta-data",
+        "https://10.0.0.5/cb",
+        "https://[::1]/cb",
+        "https://localhost/cb",
+    ] {
+        let mut body = pay_request(&server, 0);
+        body["callback"] = json!(callback);
+        server.reset().await;
+        serve_pay_request(&server, body).await;
+        let err = client().probe(&address(&server)).await.unwrap_err();
+        assert!(
+            matches!(&err, ResolveError::Invalid(why) if why.contains("non-public")),
+            "{callback}: {err:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn addresses_on_internal_ip_literals_are_refused() {
+    let production =
+        LnurlClient::new(Network::Regtest, false, Arc::new(FixedClock::new(now()))).unwrap();
+    for raw in [
+        "alice@10.0.0.5",
+        "alice@169.254.169.254",
+        "alice@192.168.1.10:8080",
+    ] {
+        let address: LightningAddress = raw.parse().unwrap();
+        assert!(
+            matches!(
+                production.probe(&address).await,
+                Err(ResolveError::InvalidAddress(_))
+            ),
+            "{raw}"
+        );
+    }
+}

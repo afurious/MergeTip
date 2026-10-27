@@ -4,8 +4,8 @@ Rust services for MergeTip: the HTTP API (`mergetip-api`) and the job runner
 (`mergetip-worker`), backed by Postgres. See [ADR 0002](../adr/0002-backend-layering.md) for how
 the crates fit together, and the RFCs for each area: [0001 data model](../rfcs/0001-data-model.md),
 [0002 payments](../rfcs/0002-payments.md), [0003 pledges, confirmations and
-notifications](../rfcs/0003-pledges-confirmations-notifications.md), [0004 fiat
-payouts](../rfcs/0004-fiat-payouts.md).
+notifications](../rfcs/0003-pledges-confirmations-notifications.md). ([0004 fiat
+payouts](../rfcs/0004-fiat-payouts.md) was withdrawn: receivers are paid over Lightning only.)
 
 ## Architecture in one picture
 
@@ -15,7 +15,6 @@ web app / extension ──REST──▶ api                                     
                                                                                             ├─ GitHub App (verify, reply)
                                                                                             ├─ LNURL (receiver invoice)
                                                                                             ├─ NWC over Nostr (sender's wallet pays)
-                                                                                            ├─ Bitnob (fiat payouts, flag-gated)
                                                                                             └─ Resend / SMTP (pledge emails)
 ```
 
@@ -25,7 +24,7 @@ web app / extension ──REST──▶ api                                     
   row in `tip_events`); a test fails if any other SQL writes it.
 - Money moves only from `paying`, through one open `payment_attempts` row at a time; a
   timed-out payment is reconciled with the wallet, never retried blindly. MergeTip holds no
-  funds: the sender's own wallet pays the receiver (or Bitnob, for fiat).
+  funds: the sender's own wallet pays the receiver.
 - Secrets are envelope-encrypted per value (AAD `"{table}.{column}:{id}"`), `Redacted` in memory,
   and never logged (`e2e/tests/log_scan.rs` proves it).
 
@@ -51,6 +50,15 @@ To receive real webhooks, create a personal GitHub App once:
 make dev-app        # opens a local page; approve the App on GitHub; writes .env and .secrets/
 make smee           # forwards deliveries to the local api
 ```
+
+GitHub rejects two things the App needs from a manifest, so they live outside it:
+
+- **Email addresses (read):** sign-in reads `/user/emails` for pledge notices, but manifests
+  refuse account permissions. After creating the App, open its settings, then
+  *Permissions & events → Account permissions → Email addresses: Read-only*, save, and accept the
+  change on the installation. Do the same for the staging and production Apps.
+- **`installation_repositories` events:** GitHub sends these to every App, so they cannot be listed
+  and need no setup.
 
 If port 5432 is already taken on your machine, set `POSTGRES_PORT` in `.env` (e.g. `5435`) and
 point `DATABASE_URL` at the same port.
@@ -98,7 +106,7 @@ startup and exits with the name of any missing or invalid variable.
 | `MASTER_KEY` / `MASTER_KEY_PREVIOUS` | both | Envelope encryption key (32-byte hex) and the old key during rotation |
 | `API_ADDR` | api | Listen address |
 | `PUBLIC_BASE_URL` | both | Web app origin: the CORS origin and the base for links in replies and emails |
-| `API_PUBLIC_URL` | both | This API's origin: OAuth callback, unsubscribe and Bitnob callback links |
+| `API_PUBLIC_URL` | both | This API's origin: OAuth callback and unsubscribe links |
 | `EXTENSION_ORIGINS` | api | Browser-extension origins allowed to make cookie-authenticated writes |
 | `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_PATH` | worker | The GitHub App (installation tokens) |
 | `GITHUB_WEBHOOK_SECRET` | api | Webhook signature secret |
@@ -109,14 +117,12 @@ startup and exits with the name of any missing or invalid variable.
 | `WORKER_CONCURRENCY` | worker | Jobs run in parallel per process |
 | `RESEND_API_KEY`, `SMTP_URL`, `EMAIL_FROM` | both | Email: Resend, else SMTP (dev only), else none |
 | `RESEND_WEBHOOK_SECRET` | api | Resend delivery events (Svix); unset disables the endpoint |
-| `FIAT_PAYOUTS_ENABLED`, `BITNOB_BASE_URL`, `BITNOB_CLIENT_ID`, `BITNOB_SECRET` | both | Fiat payouts (the `fiat_payouts` flag row must be on too) |
-| `BITNOB_WEBHOOK_SECRET` | api | Bitnob payout events |
 | `METRICS_ADDR` | both | Prometheus `/metrics` on an internal address |
 | `SENTRY_DSN` | both | Error reporting |
 | `RUST_LOG` | both | Log filter |
 
 Runtime switches live in the `feature_flags` table: `payments_enabled` (the SEV1 kill switch),
-`fiat_payouts`, `email_from_commits`.
+`email_from_commits`.
 
 ## Where things live
 
@@ -127,9 +133,8 @@ Runtime switches live in the `feature_flags` table: `payments_enabled` (the SEV1
 | `crates/parser` | The `/tip` grammar |
 | `crates/github` | GitHub App client, OAuth, verifier, bot reply templates |
 | `crates/payer` | LNURL resolution, invoice checks, NWC wallet client, test mocks |
-| `crates/fiat` | Bitnob Payouts client and webhook signatures |
 | `crates/notify` | `Mailer` (Resend, SMTP), email templates, unsubscribe tokens |
-| `crates/engine` | Every use case: comments, verification, payment, holds, pledges, confirmations, expiry, notices, payouts, operator actions |
+| `crates/engine` | Every use case: comments, verification, payment, holds, pledges, confirmations, expiry, notices, operator actions |
 | `crates/store` | Repositories, `tips::transition`, the job queue |
 | `crates/runtime` | Config, tracing and Sentry, metrics exporter, database pool, shutdown |
 | `crates/worker` | `Runner`, job handlers, metrics sampler, `ops` commands |
@@ -147,8 +152,6 @@ Runtime switches live in the `feature_flags` table: `payments_enabled` (the SEV1
 - **Runbooks:** [`docs/runbooks/`](../runbooks/README.md).
 - **Operator commands** (on a worker machine, `fly ssh console -a mergetip-worker-production`,
   where the binary is `/app`; locally `cargo run -p mergetip-worker --`):
-  - `/app ops fiat-retry <tip> --operator <name>`
-  - `/app ops fiat-refund <tip> --bolt11 <invoice> --operator <name>`
   - `/app ops rewrap --operator <name>`
 - **Migrations:** `mergetip-api migrate` (Fly runs it as the api's `release_command`).
 - **Critical tests:** [`critical-tests.md`](critical-tests.md); coverage floors via `make coverage`.

@@ -16,7 +16,6 @@ mergetip-core = { path = "crates/core" }
 mergetip-parser = { path = "crates/parser" }
 mergetip-github = { path = "crates/github" }
 mergetip-payer = { path = "crates/payer" }
-mergetip-fiat = { path = "crates/fiat" }
 mergetip-notify = { path = "crates/notify" }
 mergetip-store = { path = "crates/store" }
 mergetip-worker = { path = "crates/worker" }
@@ -46,17 +45,14 @@ async-trait = "0.1"
 # observability / config
 metrics = "0.24"
 metrics-exporter-prometheus = { version = "0.18", default-features = false, features = ["http-listener"] }
-sentry = { version = "0.49", default-features = false, features = ["backtrace", "contexts", "panic", "tracing", "reqwest", "rustls"] }
+sentry = { version = "0.49", default-features = false, features = ["backtrace", "contexts", "panic", "tracing", "reqwest", "rustls", "tower", "tower-axum-matched-path"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 dotenvy = "0.15"
 clap = { version = "4", features = ["derive", "env"] }
 
 # database
-sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "macros", "migrate", "uuid", "time", "json", "rust_decimal"] }
-
-# money (fiat amounts only; sats are integers)
-rust_decimal = { version = "1", default-features = false, features = ["std", "serde-str"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "macros", "migrate", "uuid", "time", "json"] }
 
 # api contract
 utoipa = { version = "6", features = ["axum_extras", "uuid", "time"] }

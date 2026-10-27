@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "abdbc1676fc2e40cd1d5e6c40574be9daf39dfe87c7bfa4e5a4df7a95a4cad17"
+}

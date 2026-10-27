@@ -26,8 +26,7 @@ nothing is lost, tips wait in `paying` and resume when payments are turned back 
    Paying tips are retried every 5 minutes while the flag is off. Note that a tip whose job runs
    out of attempts while paused is failed (known issue, M3 review); keep the pause short or
    re-queue those tips afterwards.
-2. **Stop fiat payouts** too: `UPDATE feature_flags SET enabled = false WHERE key = 'fiat_payouts';`
-3. **If credentials may have leaked**, revoke every wallet connection (senders must reconnect;
+2. **If credentials may have leaked**, revoke every wallet connection (senders must reconnect;
    they should also revoke the connection in their wallet app):
 
    ```sql
@@ -35,8 +34,8 @@ nothing is lost, tips wait in `paying` and resume when payments are turned back 
    ```
 
    Then rotate `MASTER_KEY` ([key-rotation.md](key-rotation.md)) and the GitHub App secrets.
-4. Post on the status page: "Tips are paused; nothing has been charged twice / we are checking."
-5. Investigate with `tip_events` (every transition, with reasons) and `payment_attempts`.
+3. Post on the status page: "Tips are paused; nothing has been charged twice / we are checking."
+4. Investigate with `tip_events` (every transition, with reasons) and `payment_attempts`.
 
 ## Verify recovery
 

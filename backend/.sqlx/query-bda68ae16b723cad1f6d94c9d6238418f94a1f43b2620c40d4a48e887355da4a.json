@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE tips SET updated_at = now() - interval '11 minutes'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "bda68ae16b723cad1f6d94c9d6238418f94a1f43b2620c40d4a48e887355da4a"
+}

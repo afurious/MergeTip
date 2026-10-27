@@ -31,19 +31,6 @@ pub fn receipt(tip: &TipContext<'_>, payment_hash: &str) -> String {
     )
 }
 
-/// The receipt for a tip paid out in local currency. Deliberately shows neither the fiat amount
-/// nor where it went: the thread is public, the receiver's bank details are not.
-pub fn paid_out(tip: &TipContext<'_>, payment_hash: &str) -> String {
-    let short_hash: String = payment_hash.chars().take(8).collect();
-    format!(
-        "⚡ @{} tipped @{} **{}**{} · paid out in local currency · payment `{short_hash}…`",
-        tip.sender,
-        tip.receiver,
-        tip.amount,
-        note_suffix(tip.note)
-    )
-}
-
 pub fn held(tip: &TipContext<'_>) -> String {
     format!(
         "⏳ @{} will tip @{} **{}**{} when this PR is merged",
@@ -229,6 +216,12 @@ pub fn failed(
             "😕 @{sender}, **{amount}** is above your per-tip limit of **{}**. [Manage limits]({}).",
             limits.per_tip_max, links.limits
         ),
+        // The wallet may or may not have paid: never claim "nothing was charged".
+        "payment_unconfirmed" => format!(
+            "😕 @{sender}, I couldn't confirm whether your wallet paid the **{amount}** tip to \
+             @{receiver}. Check your wallet's history before tipping again; MergeTip won't \
+             retry it."
+        ),
         "receiver_unpayable" => format!(
             "😕 @{sender}, @{receiver}'s Lightning address couldn't accept this payment, so \
              nothing was sent."
@@ -326,7 +319,6 @@ mod tests {
         let rendered = [
             receipt(&tip(Some("the review")), hash),
             receipt(&tip(None), hash),
-            paid_out(&tip(Some("the review")), hash),
             held(&tip(None)),
             connect_wallet(&tip(None), "https://mergetip.dev/settings/wallet"),
             needs_confirmation(
@@ -413,6 +405,7 @@ mod tests {
             "daily_cap_reached",
             "over_per_tip_cap",
             "receiver_unpayable",
+            "payment_unconfirmed",
             "payment_failed",
         ];
         let mut rendered: Vec<String> = codes

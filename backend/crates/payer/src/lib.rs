@@ -2,6 +2,7 @@
 //! that invoice, and NWC (NIP-47) to have the sender's own wallet pay it (FR-5).
 
 mod address;
+pub mod egress;
 pub mod invoice;
 pub mod lnurl;
 pub mod nwc;

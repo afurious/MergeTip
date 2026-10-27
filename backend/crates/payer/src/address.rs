@@ -21,6 +21,15 @@ impl LightningAddress {
 
     /// Hosts that may be reached over plain HTTP when local mocks are enabled: loopback and
     /// single-label names (Docker Compose service names). Never a public domain.
+    /// The domain without its port.
+    pub(crate) fn host(&self) -> &str {
+        match self.domain.rsplit_once(':') {
+            // `[v6]:port` and `name:port`; a bare IPv6 literal has no brackets to split on.
+            Some((host, port)) if port.chars().all(|c| c.is_ascii_digit()) => host,
+            _ => &self.domain,
+        }
+    }
+
     pub(crate) fn is_local(&self) -> bool {
         let host = self.domain.split(':').next().unwrap_or_default();
         host == "localhost" || host == "127.0.0.1" || !host.contains('.')

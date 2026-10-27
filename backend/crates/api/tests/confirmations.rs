@@ -318,6 +318,38 @@ async fn with_codes_on_the_emailed_code_is_required(pool: PgPool) -> sqlx::Resul
     Ok(())
 }
 
+/// Requests racing each other still get one code a minute: the limit is checked in the write.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn concurrent_code_requests_send_one_code(pool: PgPool) -> sqlx::Result<()> {
+    let w = World::new(pool).await;
+    w.enable_otp().await;
+    let tip = w.tip(TipKind::Now).await;
+    let otp = format!("/v1/confirmations/{tip}/otp");
+
+    let (a, b, c, d) = tokio::join!(
+        w.post(&otp, None),
+        w.post(&otp, None),
+        w.post(&otp, None),
+        w.post(&otp, None),
+    );
+    let statuses = [a.0, b.0, c.0, d.0];
+    let sent = statuses
+        .iter()
+        .filter(|s| **s == StatusCode::NO_CONTENT)
+        .count();
+    assert_eq!(sent, 1, "{statuses:?}");
+    assert_eq!(
+        statuses
+            .iter()
+            .filter(|s| **s == StatusCode::TOO_MANY_REQUESTS)
+            .count(),
+        3,
+        "{statuses:?}"
+    );
+    assert_eq!(w.mailer.sent().len(), 1, "one email");
+    Ok(())
+}
+
 #[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
 async fn five_wrong_codes_lock_the_code(pool: PgPool) -> sqlx::Result<()> {
     let w = World::new(pool).await;

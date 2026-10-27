@@ -56,12 +56,6 @@ async fn feature_flags_are_seeded(pool: PgPool) -> sqlx::Result<()> {
         .fetch_all(&pool)
         .await?;
     let flags: Vec<(String, bool)> = flags.into_iter().map(|f| (f.key, f.enabled)).collect();
-    assert_eq!(
-        flags,
-        [
-            ("fiat_payouts".to_owned(), false),
-            ("payments_enabled".to_owned(), true)
-        ]
-    );
+    assert_eq!(flags, [("payments_enabled".to_owned(), true)]);
     Ok(())
 }

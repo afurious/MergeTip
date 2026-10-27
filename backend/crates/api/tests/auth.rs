@@ -280,6 +280,10 @@ async fn a_deleted_account_can_sign_up_again(pool: PgPool) -> sqlx::Result<()> {
     };
 
     let session = sign_in().await;
+    // The user had turned emails off.
+    sqlx::query!("UPDATE users SET email_opt_out = true WHERE github_id = 42")
+        .execute(&pool)
+        .await?;
     let delete = Request::delete("/v1/me")
         .header(header::COOKIE, &session)
         .header(header::ORIGIN, WEB)
@@ -301,5 +305,12 @@ async fn a_deleted_account_can_sign_up_again(pool: PgPool) -> sqlx::Result<()> {
     assert_eq!(rows.len(), 1, "the same row, reactivated");
     assert_eq!(rows[0].github_login, "alice");
     assert!(rows[0].deleted_at.is_none());
+    let opted_out = sqlx::query_scalar!("SELECT email_opt_out FROM users WHERE github_id = 42")
+        .fetch_one(&pool)
+        .await?;
+    assert!(
+        opted_out,
+        "M4 review: signing up again keeps the user's email opt-out"
+    );
     Ok(())
 }

@@ -251,6 +251,10 @@ async fn receive_status_says_whether_a_tip_pays_now(pool: PgPool) -> sqlx::Resul
     );
     assert_eq!(status_of("maintainer").await.1["method"], "none");
     assert_eq!(status_of("never-seen").await.1["method"], "none");
+    // Logins a `/tip` command can't name are not looked up.
+    for login in ["-reviewer", "reviewer-", "re--viewer"] {
+        assert_eq!(status_of(login).await.0, StatusCode::NOT_FOUND, "{login}");
+    }
     let (status, _) = send(&app, "GET", "/v1/users/x/receive-status", None, None).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     Ok(())
@@ -398,6 +402,15 @@ async fn deleting_the_account_erases_secrets_and_closes_waiting_tips(
     assert_eq!(state(waiting).await, "cancelled");
     assert_eq!(state(held).await, "cancelled");
     assert_eq!(state(pledged).await, "expired");
+    // M4 review: its deadline is still ahead, so it must not linger as an unsent expiry notice.
+    let notice = sqlx::query!(
+        "SELECT last_notified_at, expires_at, email_status FROM tips WHERE id = $1",
+        pledged.as_uuid()
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(notice.last_notified_at >= notice.expires_at);
+    assert_eq!(notice.email_status.as_deref(), Some("none"));
     assert_eq!(
         state(paying).await,
         "paying",
@@ -407,5 +420,121 @@ async fn deleting_the_account_erases_secrets_and_closes_waiting_tips(
         .fetch_one(&pool)
         .await?;
     assert_eq!(rows, 4, "tip rows are kept for idempotency");
+    Ok(())
+}
+
+/// M4 review: a stolen session must not be able to switch confirmation codes off (then confirm
+/// a large tip) or raise limits. Loosening needs the web cookie from a recent sign-in.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn loosening_protections_needs_a_recent_web_sign_in(pool: PgPool) -> sqlx::Result<()> {
+    let app = fake_app(pool.clone());
+    let session = session_for(&pool, 10, "maintainer").await;
+    let patch = |body: Value, session: String| {
+        let app = app.clone();
+        async move { send(&app, "PATCH", "/v1/me/settings", Some(&session), Some(body)).await }
+    };
+    sqlx::query!("UPDATE users SET confirm_otp_enabled = true WHERE github_id = 10")
+        .execute(&pool)
+        .await?;
+
+    // A session from yesterday can tighten, not loosen.
+    sqlx::query!("UPDATE sessions SET created_at = now() - interval '1 day'")
+        .execute(&pool)
+        .await?;
+    for loosen in [
+        json!({ "confirm_otp_enabled": false }),
+        json!({ "confirm_threshold_sats": 100_000 }),
+        json!({ "per_tip_max_sats": 20_000 }),
+        json!({ "daily_max_sats": 60_000 }),
+    ] {
+        let (status, body) = patch(loosen.clone(), session.clone()).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{loosen}");
+        assert_eq!(body["error"]["code"], "reauth_required");
+    }
+    let (status, _) = patch(
+        json!({ "per_tip_max_sats": 5_000, "confirm_threshold_sats": 20_000 }),
+        session.clone(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "tightening is always fine");
+
+    // A fresh sign-in can loosen.
+    let fresh = session_for(&pool, 10, "maintainer").await;
+    let (status, body) = patch(
+        json!({ "confirm_otp_enabled": false, "per_tip_max_sats": 20_000 }),
+        fresh,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["confirm_otp_enabled"], false);
+
+    // The extension's token never can, however fresh.
+    let token = mergetip_crypto::random_token().unwrap();
+    let user = users::get_by_login(&pool, "maintainer").await.unwrap();
+    mergetip_store::sessions::create(
+        &pool,
+        user.id,
+        mergetip_store::sessions::SessionKind::Extension,
+        &token.hash,
+        time::OffsetDateTime::now_utc() + time::Duration::days(1),
+        None,
+    )
+    .await
+    .unwrap();
+    let request = axum::http::Request::patch("/v1/me/settings")
+        .header("authorization", format!("Bearer {}", token.raw.expose()))
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            json!({ "daily_max_sats": 90_000 }).to_string(),
+        ))
+        .unwrap();
+    let response = tower::ServiceExt::oneshot(app.clone(), request)
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    Ok(())
+}
+
+/// M3 review: sessions slide in the database; the browser's cookie must slide with them.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn using_a_session_renews_its_cookie(pool: PgPool) -> sqlx::Result<()> {
+    let app = fake_app(pool.clone());
+    let session = session_for(&pool, 10, "maintainer").await;
+    let get = |cookie: String, uri: &'static str| {
+        let app = app.clone();
+        async move {
+            let request = axum::http::Request::get(uri)
+                .header("cookie", format!("mt_session={cookie}"))
+                .body(axum::body::Body::empty())
+                .unwrap();
+            tower::ServiceExt::oneshot(app, request).await.unwrap()
+        }
+    };
+    let set_cookies = |response: &axum::response::Response| -> Vec<String> {
+        response
+            .headers()
+            .get_all("set-cookie")
+            .iter()
+            .map(|v| v.to_str().unwrap().to_owned())
+            .collect()
+    };
+
+    let me = get(session.clone(), "/v1/me").await;
+    assert_eq!(me.status(), StatusCode::OK);
+    let renewed = set_cookies(&me);
+    assert_eq!(renewed.len(), 1, "{renewed:?}");
+    assert!(renewed[0].starts_with(&format!("mt_session={session};")));
+    assert!(renewed[0].contains("Max-Age=2592000") && renewed[0].contains("HttpOnly"));
+
+    // A cookie that doesn't authenticate is never echoed back.
+    let bogus = get("not-a-session".into(), "/v1/me").await;
+    assert_eq!(bogus.status(), StatusCode::UNAUTHORIZED);
+    assert!(set_cookies(&bogus).is_empty());
+    let public = get("not-a-session".into(), "/v1/health").await;
+    assert!(set_cookies(&public).is_empty());
+
+    // Signing out still only clears it.
+    let (status, _) = send(&app, "POST", "/v1/auth/logout", Some(&session), None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
     Ok(())
 }

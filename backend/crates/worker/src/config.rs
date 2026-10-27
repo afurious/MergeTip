@@ -23,8 +23,6 @@ pub struct WorkerConfig {
     pub api_base_url: String,
     /// How pledge notices are emailed.
     pub mailer: mergetip_notify::MailerConfig,
-    /// Bitnob credentials when `FIAT_PAYOUTS_ENABLED=true` (RFC 0004).
-    pub bitnob: Option<mergetip_fiat::BitnobConfig>,
     /// Prometheus `/metrics` on this internal address (`METRICS_ADDR`); unset disables it.
     pub metrics_addr: Option<std::net::SocketAddr>,
     /// Errors go to Sentry when set.
@@ -99,7 +97,6 @@ impl WorkerConfig {
                 .trim_end_matches('/')
                 .to_owned(),
             mailer: mergetip_runtime::config::mailer_config(env, app_env)?,
-            bitnob: mergetip_runtime::config::bitnob_config(env)?,
             metrics_addr: env
                 .optional("METRICS_ADDR")
                 .map(|raw| {

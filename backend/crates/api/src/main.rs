@@ -49,7 +49,7 @@ async fn migrate() -> anyhow::Result<()> {
     let sentry_dsn = std::env::var("SENTRY_DSN")
         .ok()
         .filter(|v| !v.trim().is_empty());
-    let _logs = telemetry::init(app_env, sentry_dsn.as_deref());
+    let _logs = telemetry::init(app_env, "api", sentry_dsn.as_deref());
     let url = std::env::var("DATABASE_URL").context("DATABASE_URL is required")?;
     let pool = db::connect(&url, 1)
         .await
@@ -64,6 +64,7 @@ async fn serve() -> anyhow::Result<()> {
     let config = Arc::new(ApiConfig::from_env(&ProcessEnv).context("invalid configuration")?);
     let _sentry = telemetry::init(
         config.app_env,
+        "api",
         config.sentry_dsn.as_ref().map(|dsn| dsn.expose().as_str()),
     );
     if let Some(addr) = config.metrics_addr {
@@ -93,13 +94,6 @@ async fn serve() -> anyhow::Result<()> {
         receivers: Arc::new(receivers),
         mailer: mergetip_notify::from_config(&config.mailer)
             .context("cannot set up email delivery")?,
-        fiat: match &config.bitnob {
-            Some(bitnob) => Some(Arc::new(
-                mergetip_fiat::BitnobClient::new(bitnob.clone())
-                    .context("cannot set up the Bitnob client")?,
-            )),
-            None => None,
-        },
     };
     let state = AppState::new(pool, config.clone(), clock, services);
 

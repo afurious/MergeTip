@@ -151,3 +151,18 @@ pub async fn active_secret(
     .await?;
     Ok(row.map(|r| (r.id, r.nwc_uri_ciphertext)))
 }
+
+/// One connection's sealed URI and granted methods, revoked or not: reconciling an attempt asks
+/// the wallet that made it, even if the sender has since disconnected or replaced it.
+pub async fn secret_by_id(
+    exec: impl PgExecutor<'_>,
+    id: uuid::Uuid,
+) -> StoreResult<Option<(Vec<u8>, Vec<String>)>> {
+    let row = sqlx::query!(
+        "SELECT nwc_uri_ciphertext, methods FROM wallet_connections WHERE id = $1",
+        id,
+    )
+    .fetch_optional(exec)
+    .await?;
+    Ok(row.map(|r| (r.nwc_uri_ciphertext, r.methods)))
+}

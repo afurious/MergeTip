@@ -46,10 +46,6 @@ impl Engine {
     /// Pays the PR's held tips if it merged, cancels them if it closed unmerged, and leaves them
     /// while it is open. Safe to run any number of times: each tip moves at most once.
     pub async fn resolve_held(&self, job: &ResolveHeld) -> Result<(), EngineError> {
-        let held = tips::list_in_thread(&self.pool, &job.repo, job.number, TipState::Held).await?;
-        if held.is_empty() {
-            return Ok(());
-        }
         let installation = match installations::get_by_github_id(&self.pool, job.installation).await
         {
             Ok(installation) => installation,
@@ -57,6 +53,16 @@ impl Engine {
             Err(other) => return Err(other.into()),
         };
         if installation.suspended_at.is_some() {
+            return Ok(());
+        }
+        // A repo name can move between installations (transfer, uninstall and reinstall): only
+        // this installation's holds are this job's to resolve.
+        let held: Vec<_> = tips::list_in_thread(&self.pool, &job.repo, job.number, TipState::Held)
+            .await?
+            .into_iter()
+            .filter(|tip| tip.installation_id == installation.id)
+            .collect();
+        if held.is_empty() {
             return Ok(());
         }
         let repo: RepoName = job.repo.parse()?;

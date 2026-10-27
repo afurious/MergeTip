@@ -291,3 +291,56 @@ async fn the_reminder_goes_out_on_day_23_once(pool: PgPool) -> sqlx::Result<()> 
     assert_eq!(h.engine.schedule_reminders().await.unwrap(), 0, "sent once");
     Ok(())
 }
+
+/// M4 review: a new pledge's digest was dropped (its enqueue collided with a digest that was
+/// running). The expiry job's sweep queues it again, so the receiver still hears about it.
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn a_dropped_pledge_notice_is_swept_up(pool: PgPool) -> sqlx::Result<()> {
+    let mut h = harness(pool).await;
+    set_profile_email(&h, "public@example.com");
+    h.comment(1001, "/tip @reviewer 5k").await;
+    h.drain().await;
+    h.run_only(&[PayTip::KIND]).await;
+    // notify_pledge runs, but its digest is lost.
+    h.run_only(&[mergetip_engine::jobs::NotifyPledge::KIND])
+        .await;
+    sqlx::query!("DELETE FROM jobs WHERE kind = 'send_digest'")
+        .execute(&h.pool)
+        .await?;
+    h.drain().await;
+    assert!(h.mailer.sent().is_empty());
+
+    h.clock.advance(Duration::minutes(11));
+    sqlx::query!("UPDATE tips SET updated_at = now() - interval '11 minutes'")
+        .execute(&h.pool)
+        .await?;
+    h.engine.expire_tips().await.unwrap();
+    h.release_jobs_due_by_clock().await;
+    h.drain().await;
+    assert_eq!(h.mailer.sent().len(), 1, "the swept-up pledge was emailed");
+    Ok(())
+}
+
+/// M4 review: once an address is stored from the profile, later pledges don't ask GitHub
+/// again (they would spend the installation's rate limit on every pledge).
+#[sqlx::test(migrator = "mergetip_store::MIGRATOR")]
+async fn a_stored_address_is_not_looked_up_again(pool: PgPool) -> sqlx::Result<()> {
+    let mut h = harness(pool).await;
+    set_profile_email(&h, "first@example.com");
+    pledge(&mut h, 1001, "/tip @reviewer 5k").await;
+    assert_eq!(
+        stored_email(&h).await,
+        Some(("first@example.com".into(), "public_profile".into()))
+    );
+    // The profile now says something else; a lookup would overwrite the stored address.
+    set_profile_email(&h, "second@example.com");
+    h.clock.advance(Duration::days(2));
+    pledge(&mut h, 1002, "/tip @reviewer 1k").await;
+    assert_eq!(h.states().await, ["pledged", "pledged"]);
+    assert_eq!(
+        stored_email(&h).await,
+        Some(("first@example.com".into(), "public_profile".into())),
+        "GitHub wasn't asked again"
+    );
+    Ok(())
+}

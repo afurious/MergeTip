@@ -216,7 +216,7 @@ fn parse_command(rest: &str) -> Result<Parsed, ParseError> {
 }
 
 /// GitHub's login rules: alphanumerics and single hyphens, not at either end, 1–39 characters.
-fn is_valid_login(login: &str) -> bool {
+pub fn is_valid_login(login: &str) -> bool {
     !login.is_empty()
         && login.len() <= MAX_LOGIN_LEN
         && login.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')

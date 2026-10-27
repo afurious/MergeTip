@@ -14,7 +14,6 @@
      unless one sender dominates (abuse).
    - `receiver_unpayable`: one LNURL provider down? Group by receiver domain.
    - `payment_failed`, `wallet_invalid`: wallet or relay side → [relay-outage.md](relay-outage.md).
-   - `fiat_*`: → [bitnob-outage.md](bitnob-outage.md).
 2. `nwc_errors_total` by `code`: a spike in `TIMEOUT` or `RELAY` means relays
    ([relay-outage.md](relay-outage.md)).
 3. Queue: `jobs_ready`, `jobs_oldest_age_seconds`, `jobs_dead`, then

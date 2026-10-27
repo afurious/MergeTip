@@ -18,7 +18,7 @@ Data loss or corruption: dropped table, bad migration, provider incident.
    incident (Fly Postgres: `fly postgres` snapshot restore; managed providers: PITR).
 3. Run migrations against it: `DATABASE_URL=<new> mergetip-api migrate`.
 4. Before pointing the apps at it, reconcile anything in flight at the restore point:
-   - `SELECT id FROM tips WHERE state IN ('paying', 'fiat_processing');` and their
+   - `SELECT id FROM tips WHERE state = 'paying';` and their
      `payment_attempts`. For each attempt in `pending`/`unknown`, the reconcile job asks the
      sender's wallet (`lookup_invoice`) when the worker starts: leave them, do not delete them.
    - Tips paid after the restore point exist only in wallets and GitHub receipts. Compare the

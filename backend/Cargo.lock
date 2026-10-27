@@ -2242,7 +2242,6 @@ dependencies = [
  "mergetip-core",
  "mergetip-crypto",
  "mergetip-engine",
- "mergetip-fiat",
  "mergetip-github",
  "mergetip-notify",
  "mergetip-parser",
@@ -2251,7 +2250,7 @@ dependencies = [
  "mergetip-store",
  "metrics",
  "nostr-sdk",
- "rust_decimal",
+ "sentry",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -2333,7 +2332,6 @@ dependencies = [
  "hex",
  "mergetip-core",
  "mergetip-crypto",
- "mergetip-fiat",
  "mergetip-github",
  "mergetip-notify",
  "mergetip-parser",
@@ -2341,7 +2339,6 @@ dependencies = [
  "mergetip-store",
  "metrics",
  "nostr-sdk",
- "rust_decimal",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -2352,28 +2349,6 @@ dependencies = [
  "tracing",
  "uuid",
  "wiremock",
-]
-
-[[package]]
-name = "mergetip-fiat"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "hex",
- "hmac 0.13.0",
- "mergetip-core",
- "mergetip-crypto",
- "reqwest",
- "rust_decimal",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "thiserror 2.0.21",
- "time",
- "tokio",
- "tracing",
- "wiremock",
- "zeroize",
 ]
 
 [[package]]
@@ -2456,7 +2431,6 @@ name = "mergetip-runtime"
 version = "0.1.0"
 dependencies = [
  "mergetip-crypto",
- "mergetip-fiat",
  "mergetip-notify",
  "mergetip-store",
  "metrics",
@@ -2478,7 +2452,6 @@ dependencies = [
  "hex",
  "mergetip-core",
  "metrics",
- "rust_decimal",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -2503,7 +2476,6 @@ dependencies = [
  "mergetip-core",
  "mergetip-crypto",
  "mergetip-engine",
- "mergetip-fiat",
  "mergetip-github",
  "mergetip-notify",
  "mergetip-parser",
@@ -3539,23 +3511,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust_decimal"
-version = "1.43.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7653272e75dcac41dc199fbea6f5797633994fafd339943c06c9af16bf29cd3a"
-dependencies = [
- "arrayvec",
- "borsh",
- "bytes",
- "num-traits",
- "rand 0.8.8",
- "rand 0.9.5",
- "serde",
- "serde_json",
- "wasm-bindgen",
-]
-
-[[package]]
 name = "rustc-demangle"
 version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3806,6 +3761,7 @@ dependencies = [
  "sentry-contexts",
  "sentry-core",
  "sentry-panic",
+ "sentry-tower",
  "sentry-tracing",
  "tokio",
  "ureq",
@@ -3857,6 +3813,21 @@ checksum = "b7153e68642b761ed3aa62c022795c11b2facc728b2db7484084492373c944f9"
 dependencies = [
  "sentry-backtrace",
  "sentry-core",
+]
+
+[[package]]
+name = "sentry-tower"
+version = "0.49.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "624ee2c60caf72fa2cd6be00334b3a3ce0c6df3b1f01941ea62e3d244492d334"
+dependencies = [
+ "axum",
+ "http",
+ "pin-project",
+ "sentry-core",
+ "tower-layer",
+ "tower-service",
+ "url",
 ]
 
 [[package]]
@@ -4173,7 +4144,6 @@ dependencies = [
  "log",
  "memchr",
  "percent-encoding",
- "rust_decimal",
  "rustls",
  "serde",
  "serde_json",
@@ -4246,7 +4216,6 @@ dependencies = [
  "generic-array",
  "log",
  "percent-encoding",
- "rust_decimal",
  "serde",
  "sha1 0.11.0",
  "sha2 0.11.1",
@@ -4281,7 +4250,6 @@ dependencies = [
  "md-5",
  "memchr",
  "rand 0.10.3",
- "rust_decimal",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -5057,7 +5025,6 @@ dependencies = [
  "cfg-if",
  "once_cell",
  "rustversion",
- "serde",
  "wasm-bindgen-macro",
  "wasm-bindgen-shared",
 ]

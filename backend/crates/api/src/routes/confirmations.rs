@@ -141,25 +141,23 @@ pub async fn send_code(
         ));
     };
     let now = state.clock().now();
-    if let Some(existing) = otp_codes::get(state.pool(), tip.id).await?
-        && now - existing.created_at < OTP_RESEND_INTERVAL
-    {
+    let code = new_otp()?;
+    let stored = otp_codes::replace_unless_recent(
+        state.pool(),
+        tip.id,
+        &otp_mac(state.keyring(), tip.id, &code),
+        now,
+        now + OTP_TTL,
+        now - OTP_RESEND_INTERVAL,
+    )
+    .await?;
+    if !stored {
         return Err(ApiError::new(
             StatusCode::TOO_MANY_REQUESTS,
             "otp_rate_limited",
             "A code was sent less than a minute ago. Check your email, or try again shortly.",
         ));
     }
-
-    let code = new_otp()?;
-    otp_codes::replace(
-        state.pool(),
-        tip.id,
-        &otp_mac(state.keyring(), tip.id, &code),
-        now,
-        now + OTP_TTL,
-    )
-    .await?;
     let unsubscribe = mergetip_notify::unsubscribe::url(
         &state.config().api_public_url,
         state.keyring(),

@@ -252,7 +252,9 @@ fn wallet_error(error: NIP47Error) -> PayError {
 }
 
 /// A wallet's preimage is only proof if it hashes to the invoice's payment hash.
-fn check_preimage(preimage: &str, payment_hash: &str) -> Result<(), PayError> {
+/// Whether `preimage` (hex) hashes to `payment_hash`: the proof a payment happened. The one
+/// place this check is written; the engine uses it before marking a tip paid.
+pub fn check_preimage(preimage: &str, payment_hash: &str) -> Result<(), PayError> {
     let bytes = hex::decode(preimage.trim())
         .map_err(|_| PayError::Protocol("preimage is not hex".into()))?;
     if hex::encode(Sha256::digest(&bytes)).eq_ignore_ascii_case(payment_hash) {

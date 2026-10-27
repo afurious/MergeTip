@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET email_opt_out = true WHERE github_id = 42",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "9abf4ee316fa1151ed2ceffa3ef111f4085cd595af44dfa071f05a53b67d36fa"
+}

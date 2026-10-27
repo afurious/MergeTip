@@ -7,7 +7,6 @@ pub(crate) mod confirmations;
 pub(crate) mod email;
 pub(crate) mod health;
 pub(crate) mod me;
-pub(crate) mod payouts;
 pub(crate) mod settings;
 pub(crate) mod tips;
 pub(crate) mod users;
@@ -24,6 +23,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, patch, post, put},
 };
+use sentry::integrations::tower::{NewSentryLayer, SentryHttpLayer};
 use tower_http::{
     cors::CorsLayer,
     limit::RequestBodyLimitLayer,
@@ -40,7 +40,7 @@ const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
 const BODY_LIMIT_BYTES: usize = 5 * 1024 * 1024;
 /// Everything a client sends is small JSON.
 const CLIENT_BODY_LIMIT_BYTES: usize = 64 * 1024;
-/// Resend and Bitnob events are small; a big one is not theirs.
+/// Resend events are small; a big one is not theirs.
 const PROVIDER_WEBHOOK_LIMIT_BYTES: usize = 256 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -67,16 +67,6 @@ pub fn router(state: AppState) -> Router {
         .route("/me", get(me::get_me).delete(me::delete_me))
         .route("/me/tips", get(tips::list_my_tips))
         .route("/users/{login}/receive-status", get(users::receive_status))
-        .route("/payouts/countries", get(payouts::list_countries))
-        .route("/payouts/countries/{code}", get(payouts::country_form))
-        .route(
-            "/me/payout-methods",
-            get(payouts::list_methods).post(payouts::add_method),
-        )
-        .route(
-            "/me/payout-methods/{id}",
-            patch(payouts::update_method).delete(payouts::delete_method),
-        )
         .route("/tips/comment", post(compose::post_tip_comment))
         .route(
             "/me/wallet",
@@ -113,16 +103,13 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/webhooks/resend",
             post(webhooks::resend).layer(DefaultBodyLimit::max(PROVIDER_WEBHOOK_LIMIT_BYTES)),
-        )
-        .route(
-            "/webhooks/bitnob",
-            post(webhooks::bitnob).layer(DefaultBodyLimit::max(PROVIDER_WEBHOOK_LIMIT_BYTES)),
         );
 
     // Layers run outermost-last. CORS wraps every layer that can answer on its own (body limit,
     // timeout) and the error normaliser, so even those responses reach the browser readable and
     // in the JSON error shape. The request ID is set before tracing sees the request, and
-    // credentials are marked sensitive so they never reach the trace output.
+    // credentials are marked sensitive so they never reach the trace output. Sentry wraps it all:
+    // each request gets its own hub and a transaction named after the matched route.
     Router::new()
         .route("/healthz", get(health::healthz))
         .nest("/v1", v1)
@@ -144,6 +131,10 @@ pub fn router(state: AppState) -> Router {
             crate::hardening::rate_limit,
         ))
         .layer(middleware::map_response(json_error_body))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            crate::extract::slide_session_cookie,
+        ))
         .layer(middleware::from_fn(crate::hardening::security_headers))
         .layer(cors)
         .layer(PropagateRequestIdLayer::new(REQUEST_ID))
@@ -154,6 +145,8 @@ pub fn router(state: AppState) -> Router {
             header::SET_COOKIE,
         ]))
         .layer(SetRequestIdLayer::new(REQUEST_ID, MakeRequestUuid))
+        .layer(SentryHttpLayer::new().enable_transaction())
+        .layer(NewSentryLayer::new_from_top())
         .with_state(state)
 }
 

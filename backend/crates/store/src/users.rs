@@ -168,7 +168,7 @@ pub async fn anonymise(
         r#"
         UPDATE users SET
             github_login = $2, login_stale = true, avatar_url = NULL, lightning_address = NULL,
-            email_ciphertext = NULL, email_source = NULL, email_opt_out = true,
+            email_ciphertext = NULL, email_source = NULL,
             github_token_ciphertext = NULL, github_refresh_token_ciphertext = NULL,
             github_token_expires_at = NULL, confirm_otp_enabled = false, deleted_at = $3
         WHERE id = $1
@@ -182,10 +182,11 @@ pub async fn anonymise(
     Ok(())
 }
 
-/// Signing in again after deleting the account starts it afresh.
+/// Signing in again after deleting the account starts it afresh. Preferences the user chose
+/// (such as an email opt-out) are kept.
 pub async fn reactivate(exec: impl PgExecutor<'_>, id: UserId) -> StoreResult<()> {
     sqlx::query!(
-        "UPDATE users SET deleted_at = NULL, email_opt_out = false WHERE id = $1 AND deleted_at IS NOT NULL",
+        "UPDATE users SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL",
         id.as_uuid()
     )
     .execute(exec)

@@ -99,12 +99,17 @@ impl LnurlClient {
         allow_local_http: bool,
         clock: Arc<dyn Clock>,
     ) -> Result<Self, ResolveError> {
-        let http = reqwest::Client::builder()
+        let mut builder = reqwest::Client::builder()
             .user_agent(concat!("mergetip/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(CONNECT_TIMEOUT)
             .timeout(REQUEST_TIMEOUT)
             // A redirect could leave HTTPS or the address's own domain; LNURL never needs one.
-            .redirect(reqwest::redirect::Policy::none())
+            .redirect(reqwest::redirect::Policy::none());
+        // Outside local development, names may only resolve to public addresses (SSRF).
+        if !allow_local_http {
+            builder = builder.dns_resolver(Arc::new(crate::egress::PublicOnlyResolver));
+        }
+        let http = builder
             .build()
             .map_err(|err| ResolveError::Unreachable(err.to_string()))?;
         Ok(Self {
@@ -203,7 +208,7 @@ impl LnurlClient {
     fn scheme_for(&self, address: &LightningAddress) -> Result<&'static str, ResolveError> {
         if self.allow_local_http && address.is_local() {
             Ok("http")
-        } else if address.is_local() {
+        } else if address.is_local() || !crate::egress::host_allowed(address.host()) {
             Err(ResolveError::InvalidAddress(address.to_string()))
         } else {
             Ok("https")
@@ -224,11 +229,19 @@ impl LnurlClient {
             && address.is_local()
             && callback.scheme() == "http"
             && local_host;
-        if callback.scheme() == "https" || local_mock {
-            Ok(())
-        } else {
-            Err(ResolveError::Invalid("callback is not HTTPS".into()))
+        if local_mock {
+            return Ok(());
         }
+        if callback.scheme() != "https" {
+            return Err(ResolveError::Invalid("callback is not HTTPS".into()));
+        }
+        // The server chooses the callback: it must not aim us at an internal address.
+        if !callback.host_str().is_some_and(crate::egress::host_allowed) {
+            return Err(ResolveError::Invalid(
+                "callback points at a non-public host".into(),
+            ));
+        }
+        Ok(())
     }
 
     async fn get_json<T: serde::de::DeserializeOwned>(

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET confirm_otp_enabled = true WHERE github_id = 10",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "34098887390ecbdf042d2b6908ec9f3b2a63d0f79be6c76d81743342d46d7484"
+}

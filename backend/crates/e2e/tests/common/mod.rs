@@ -178,7 +178,6 @@ impl System {
                 LnurlClient::new(Network::Regtest, true, Arc::new(SystemClock)).unwrap(),
             ),
             mailer: api_mail.clone(),
-            fiat: None,
         };
         let api = router(AppState::new(pool.clone(), config, clock.clone(), services));
 

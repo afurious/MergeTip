@@ -13,9 +13,13 @@ pub enum EngineError {
     /// Input that can never be processed (an unparseable payload, a missing event row).
     #[error("malformed input: {0}")]
     Malformed(String),
-    /// Not now: try again after `after` (payments paused, a receiver's server down).
+    /// Not now: try again after `after` (a receiver's server down, a provider outage).
     #[error("{reason}")]
     Retry { reason: String, after: Duration },
+    /// Payments are switched off (`payments_enabled`). Not a failure: the job waits without
+    /// using up its attempts, however long the pause lasts.
+    #[error("payments are paused")]
+    Paused { after: Duration },
 }
 
 impl From<sqlx::Error> for EngineError {
@@ -33,7 +37,7 @@ impl EngineError {
             Self::Store(_) => true,
             Self::GitHub(err) => err.is_retryable(),
             Self::Malformed(_) => false,
-            Self::Retry { .. } => true,
+            Self::Retry { .. } | Self::Paused { .. } => true,
         }
     }
 
@@ -41,7 +45,7 @@ impl EngineError {
     pub fn retry_after(&self, now: OffsetDateTime) -> Option<Duration> {
         match self {
             Self::GitHub(err) => err.retry_after(now),
-            Self::Retry { after, .. } => Some(*after),
+            Self::Retry { after, .. } | Self::Paused { after } => Some(*after),
             _ => None,
         }
     }

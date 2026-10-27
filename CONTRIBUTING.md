@@ -5,7 +5,7 @@
 - **Commits:** [Conventional Commits](https://www.conventionalcommits.org/) (`feat(payer): …`, `fix(web): …`).
 - **Design notes:** any change touching payments, auth or the data model needs a one-page RFC in
   `docs/rfcs/` reviewed before coding.
-- **Feature flags:** risky features (fiat payouts, extension tip button, auto-tips) ship behind
+- **Feature flags:** risky features (extension tip button, auto-tips) ship behind
   flags stored in Postgres.
 - **Migrations:** expand–contract only; rollback must never need a down-migration.
 

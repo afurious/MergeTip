@@ -130,7 +130,6 @@ async fn no_secret_ever_reaches_the_logs(pool: PgPool) -> sqlx::Result<()> {
     assert_eq!(status, StatusCode::OK, "{body}");
     system.wait_for_idle_queue().await;
     secrets.push(email.to.clone());
-    secrets.push(code);
 
     // A pledge claimed by a newcomer who signs in.
     system
@@ -172,5 +171,11 @@ async fn no_secret_ever_reaches_the_logs(pool: PgPool) -> sqlx::Result<()> {
             "a secret leaked: {secret:.6}…"
         );
     }
+    // Six digits also turn up inside timestamps and durations: look for the code as a number
+    // of its own.
+    let otp_logged = logs
+        .split(|c: char| !c.is_ascii_digit())
+        .any(|number| number == code);
+    assert!(!otp_logged, "the confirmation code leaked");
     Ok(())
 }

@@ -15,30 +15,36 @@ pub struct OtpCode {
     pub created_at: OffsetDateTime,
 }
 
-/// Issues a new code for the tip, replacing any earlier one (and its attempt count).
-pub async fn replace(
+/// Issues a new code for the tip, replacing any earlier one (and its attempt count) unless that
+/// one was issued after `resend_after`. Returns whether the new code was stored; the check and
+/// the write are one statement, so concurrent requests can't both pass the resend limit.
+pub async fn replace_unless_recent(
     exec: impl PgExecutor<'_>,
     tip_id: TipId,
     code_hmac: &str,
     created_at: OffsetDateTime,
     expires_at: OffsetDateTime,
-) -> StoreResult<()> {
-    sqlx::query!(
+    resend_after: OffsetDateTime,
+) -> StoreResult<bool> {
+    let stored = sqlx::query_scalar!(
         r#"
         INSERT INTO otp_codes (tip_id, code_hmac, expires_at, attempts, created_at)
         VALUES ($1, $2, $3, 0, $4)
         ON CONFLICT (tip_id) DO UPDATE SET
             code_hmac = EXCLUDED.code_hmac, expires_at = EXCLUDED.expires_at,
             attempts = 0, created_at = EXCLUDED.created_at
+        WHERE otp_codes.created_at <= $5
+        RETURNING tip_id
         "#,
         tip_id.as_uuid(),
         code_hmac,
         expires_at,
         created_at,
+        resend_after,
     )
-    .execute(exec)
+    .fetch_optional(exec)
     .await?;
-    Ok(())
+    Ok(stored.is_some())
 }
 
 pub async fn get(exec: impl PgExecutor<'_>, tip_id: TipId) -> StoreResult<Option<OtpCode>> {

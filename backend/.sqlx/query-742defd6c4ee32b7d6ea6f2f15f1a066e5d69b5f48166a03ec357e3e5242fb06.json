@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE users SET\n            github_login = $2, login_stale = true, avatar_url = NULL, lightning_address = NULL,\n            email_ciphertext = NULL, email_source = NULL,\n            github_token_ciphertext = NULL, github_refresh_token_ciphertext = NULL,\n            github_token_expires_at = NULL, confirm_otp_enabled = false, deleted_at = $3\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "742defd6c4ee32b7d6ea6f2f15f1a066e5d69b5f48166a03ec357e3e5242fb06"
+}

@@ -5,17 +5,31 @@ use crate::AppEnv;
 /// Human-readable logs in dev; JSON everywhere else so log pipelines can index the structured
 /// fields (`tip_id`, `job_id`, …). `RUST_LOG` overrides the default `info` filter.
 ///
-/// With a Sentry DSN, errors (and `error!` events) also go to Sentry. Default PII is off: no
-/// IPs, headers or user data are attached, and the logs themselves never carry secrets. Keep the
-/// returned guard alive for the life of the process; dropping it flushes Sentry.
+/// With a Sentry DSN, errors (and `error!` events) also go to Sentry, tagged with `service` so
+/// the api and worker can share one project. The release is `SENTRY_RELEASE`, which the image
+/// sets from the build's version; without it every binary would report this crate's version. A sample of requests is traced: all of them in dev,
+/// a tenth elsewhere. Default PII is off: no IPs, headers or user data are attached, and the logs
+/// themselves never carry secrets. Keep the returned guard alive for the life of the process;
+/// dropping it flushes Sentry.
 #[must_use = "dropping the guard shuts Sentry down"]
-pub fn init(app_env: AppEnv, sentry_dsn: Option<&str>) -> Option<sentry::ClientInitGuard> {
+pub fn init(
+    app_env: AppEnv,
+    service: &'static str,
+    sentry_dsn: Option<&str>,
+) -> Option<sentry::ClientInitGuard> {
     let guard = sentry_dsn.map(|dsn| {
         let mut options = sentry::ClientOptions::default();
-        options.release = sentry::release_name!();
+        options.release = std::env::var("SENTRY_RELEASE")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .map(Into::into)
+            .or_else(|| sentry::release_name!());
         options.environment = Some(app_env.as_str().into());
         options.send_default_pii = false;
-        sentry::init((dsn, options))
+        let options = options.traces_sample_rate(if app_env.is_dev() { 1.0 } else { 0.1 });
+        let guard = sentry::init((dsn, options));
+        sentry::configure_scope(|scope| scope.set_tag("service", service));
+        guard
     });
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     let output = if app_env.is_dev() {

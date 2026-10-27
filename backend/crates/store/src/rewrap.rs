@@ -13,17 +13,15 @@ pub enum Column {
     UserGithubRefreshToken,
     WalletNwcUri,
     TipClaimToken,
-    PayoutBeneficiary,
 }
 
 impl Column {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 5] = [
         Self::UserEmail,
         Self::UserGithubToken,
         Self::UserGithubRefreshToken,
         Self::WalletNwcUri,
         Self::TipClaimToken,
-        Self::PayoutBeneficiary,
     ];
 
     /// The AAD prefix; the row ID follows the colon.
@@ -34,7 +32,6 @@ impl Column {
             Self::UserGithubRefreshToken => "users.github_refresh_token",
             Self::WalletNwcUri => "wallet_connections.nwc_uri",
             Self::TipClaimToken => "tips.claim_token",
-            Self::PayoutBeneficiary => "payout_methods.beneficiary",
         }
     }
 
@@ -81,10 +78,6 @@ pub async fn batch(
             r#"SELECT id, claim_token_ciphertext AS "blob!" FROM tips
                WHERE claim_token_ciphertext IS NOT NULL AND id > $1 ORDER BY id LIMIT $2"#
         ),
-        Column::PayoutBeneficiary => page!(
-            r#"SELECT id, beneficiary_ciphertext AS "blob!" FROM payout_methods
-               WHERE beneficiary_ciphertext IS NOT NULL AND id > $1 ORDER BY id LIMIT $2"#
-        ),
     })
 }
 
@@ -122,10 +115,6 @@ pub async fn replace(
         ),
         Column::TipClaimToken => swap!(
             "UPDATE tips SET claim_token_ciphertext = $2 WHERE id = $1 AND claim_token_ciphertext = $3"
-        ),
-        Column::PayoutBeneficiary => swap!(
-            "UPDATE payout_methods SET beneficiary_ciphertext = $2
-             WHERE id = $1 AND beneficiary_ciphertext = $3"
         ),
     };
     Ok(rows == 1)

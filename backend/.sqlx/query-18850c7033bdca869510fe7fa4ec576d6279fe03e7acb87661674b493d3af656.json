@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT receiver_id AS \"receiver_id!\" FROM tips\n        WHERE state = 'pledged' AND receiver_id IS NOT NULL AND last_notified_at IS NULL\n          AND email_status = 'pending' AND updated_at < $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "receiver_id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "tips",
+            "name": "receiver_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "18850c7033bdca869510fe7fa4ec576d6279fe03e7acb87661674b493d3af656"
+}
