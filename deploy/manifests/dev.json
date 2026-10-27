@@ -10,14 +10,12 @@
     "issues": "write",
     "pull_requests": "write",
     "contents": "read",
-    "metadata": "read",
-    "email_addresses": "read"
+    "metadata": "read"
   },
   "default_events": [
     "issue_comment",
     "pull_request",
     "pull_request_review",
-    "pull_request_review_comment",
-    "installation_repositories"
+    "pull_request_review_comment"
   ]
 }

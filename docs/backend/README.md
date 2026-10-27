@@ -51,6 +51,15 @@ make dev-app        # opens a local page; approve the App on GitHub; writes .env
 make smee           # forwards deliveries to the local api
 ```
 
+GitHub rejects two things the App needs from a manifest, so they live outside it:
+
+- **Email addresses (read):** sign-in reads `/user/emails` for pledge notices, but manifests
+  refuse account permissions. After creating the App, open its settings, then
+  *Permissions & events → Account permissions → Email addresses: Read-only*, save, and accept the
+  change on the installation. Do the same for the staging and production Apps.
+- **`installation_repositories` events:** GitHub sends these to every App, so they cannot be listed
+  and need no setup.
+
 If port 5432 is already taken on your machine, set `POSTGRES_PORT` in `.env` (e.g. `5435`) and
 point `DATABASE_URL` at the same port.
 
