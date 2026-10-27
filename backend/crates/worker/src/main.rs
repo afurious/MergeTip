@@ -26,6 +26,7 @@ async fn main() -> anyhow::Result<()> {
     let config = WorkerConfig::from_env(&ProcessEnv).context("invalid configuration")?;
     let _sentry = telemetry::init(
         config.app_env,
+        "worker",
         config.sentry_dsn.as_ref().map(|dsn| dsn.expose().as_str()),
     );
     let pool = db::connect(config.database_url.expose(), config.pool_size())

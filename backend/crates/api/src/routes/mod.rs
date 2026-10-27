@@ -23,6 +23,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, patch, post, put},
 };
+use sentry::integrations::tower::{NewSentryLayer, SentryHttpLayer};
 use tower_http::{
     cors::CorsLayer,
     limit::RequestBodyLimitLayer,
@@ -107,7 +108,8 @@ pub fn router(state: AppState) -> Router {
     // Layers run outermost-last. CORS wraps every layer that can answer on its own (body limit,
     // timeout) and the error normaliser, so even those responses reach the browser readable and
     // in the JSON error shape. The request ID is set before tracing sees the request, and
-    // credentials are marked sensitive so they never reach the trace output.
+    // credentials are marked sensitive so they never reach the trace output. Sentry wraps it all:
+    // each request gets its own hub and a transaction named after the matched route.
     Router::new()
         .route("/healthz", get(health::healthz))
         .nest("/v1", v1)
@@ -143,6 +145,8 @@ pub fn router(state: AppState) -> Router {
             header::SET_COOKIE,
         ]))
         .layer(SetRequestIdLayer::new(REQUEST_ID, MakeRequestUuid))
+        .layer(SentryHttpLayer::new().enable_transaction())
+        .layer(NewSentryLayer::new_from_top())
         .with_state(state)
 }
 
